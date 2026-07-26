@@ -50,3 +50,21 @@ def test_get_balance_raises_for_unknown_customer(khata):
 def test_credit_customer_rejects_non_positive_amount(khata):
     with pytest.raises(ValueError):
         khata.credit_customer(customer_name="Ramesh", amount=Decimal("0"))
+
+
+def test_credit_customer_treats_underscore_and_percent_as_literal_characters(khata):
+    # Test underscore as literal character, not SQL wildcard
+    khata.credit_customer(customer_name="Ram_sh", amount=Decimal("111"))
+    khata.credit_customer(customer_name="Ramesh", amount=Decimal("222"))
+
+    # Verify underscore name returns correct balance, not both
+    assert khata.get_balance(customer_name="Ram_sh") == Decimal("111")
+    assert khata.get_balance(customer_name="Ramesh") == Decimal("222")
+
+    # Test percent as literal character, not SQL wildcard
+    khata.credit_customer(customer_name="100%Store", amount=Decimal("333"))
+    khata.credit_customer(customer_name="100XStore", amount=Decimal("444"))
+
+    # Verify percent name returns correct balance, not both
+    assert khata.get_balance(customer_name="100%Store") == Decimal("333")
+    assert khata.get_balance(customer_name="100XStore") == Decimal("444")

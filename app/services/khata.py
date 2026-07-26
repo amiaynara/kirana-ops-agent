@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+from sqlalchemy import func
+
 from app.errors import CustomerNotFoundError
 from app.models import Customer, KhataLedger
 
@@ -8,14 +10,21 @@ class KhataService:
     def __init__(self, session_factory):
         self._session_factory = session_factory
 
+    def _find_customer(self, session, customer_name):
+        """Find a customer by name using exact case-insensitive match.
+
+        Treats % and _ as literal characters, not SQL wildcards.
+        """
+        return session.query(Customer).filter(
+            func.lower(Customer.name) == customer_name.lower()
+        ).one_or_none()
+
     def credit_customer(self, *, customer_name, amount, note=None):
         if amount <= 0:
             raise ValueError("amount must be positive")
         with self._session_factory() as session:
             with session.begin():
-                customer = session.query(Customer).filter(
-                    Customer.name.ilike(customer_name)
-                ).one_or_none()
+                customer = self._find_customer(session, customer_name)
                 if customer is None:
                     customer = Customer(name=customer_name)
                     session.add(customer)
@@ -29,9 +38,7 @@ class KhataService:
             raise ValueError("amount must be positive")
         with self._session_factory() as session:
             with session.begin():
-                customer = session.query(Customer).filter(
-                    Customer.name.ilike(customer_name)
-                ).one_or_none()
+                customer = self._find_customer(session, customer_name)
                 if customer is None:
                     raise CustomerNotFoundError(customer_name)
                 session.add(KhataLedger(
@@ -40,9 +47,7 @@ class KhataService:
 
     def get_balance(self, *, customer_name):
         with self._session_factory() as session:
-            customer = session.query(Customer).filter(
-                Customer.name.ilike(customer_name)
-            ).one_or_none()
+            customer = self._find_customer(session, customer_name)
             if customer is None:
                 raise CustomerNotFoundError(customer_name)
             entries = session.query(KhataLedger).filter(
