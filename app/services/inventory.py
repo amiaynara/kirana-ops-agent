@@ -21,6 +21,8 @@ class InventoryService:
             raise ValueError(f"gst_slab must be one of {sorted(ALLOWED_GST_SLABS)}, got {gst_slab!r}")
         if sell_price < cost_price:
             raise BelowCostError(sell_price, cost_price)
+        if initial_qty < 0:
+            raise ValueError("initial_qty must not be negative")
 
         with self._session_factory() as session:
             with session.begin():

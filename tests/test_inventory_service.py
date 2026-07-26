@@ -61,6 +61,16 @@ def test_create_product_refuses_selling_below_cost(inventory):
         )
 
 
+def test_create_product_rejects_negative_initial_qty(inventory):
+    with pytest.raises(ValueError):
+        inventory.create_product(
+            name="Negative Stock", category="fmcg", unit="packet", is_loose=False,
+            hsn_code="00000000", gst_slab=5, cost_price=Decimal("1"),
+            sell_price=Decimal("2"), mrp=Decimal("2"), reorder_level=Decimal("1"),
+            initial_qty=Decimal("-5"),
+        )
+
+
 def test_receive_stock_increments_qty(inventory):
     product_id = inventory.create_product(
         name="Fortune Oil 1L", category="staples", unit="packet", is_loose=False,
