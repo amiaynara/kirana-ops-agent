@@ -56,3 +56,20 @@ def test_bill_level_rounding_avoids_drift_vs_naive_per_line_rounding():
     assert naive_sum_of_rounded_lines == Decimal("33.34")
     assert result.grand_total == Decimal("33.33")
     assert result.grand_total != naive_sum_of_rounded_lines
+
+
+def test_grand_total_reconciles_with_rounded_breakup_on_sub_paisa_amounts():
+    # 4.10 * 5% = 0.205 GST, split into cgst=sgst=0.1025 each - a genuine
+    # sub-paisa amount. grand_total must equal the sum of the *rounded*
+    # subtotal/cgst_total/sgst_total, not an independent rounding of the raw
+    # combined sum (4.10 + 0.1025 + 0.1025 = 4.305, which would round up to
+    # 4.31 and no longer reconcile with the rounded breakup of 4.30).
+    lines = [
+        BillLineInput(product_id=5, product_name="Parle-G 100g", qty=Decimal("1"),
+                       unit_price=Decimal("4.10"), gst_slab=5),
+    ]
+    result = compute_bill_totals(lines)
+    assert result.subtotal == Decimal("4.10")
+    assert result.cgst_total == Decimal("0.10")
+    assert result.sgst_total == Decimal("0.10")
+    assert result.grand_total == result.subtotal + result.cgst_total + result.sgst_total == Decimal("4.30")

@@ -67,10 +67,18 @@ def compute_bill_totals(lines: list[BillLineInput]) -> BillTotals:
             line_total=_round_paisa(line_subtotal + line_gst),
         ))
 
+    subtotal = _round_paisa(raw_subtotal)
+    cgst_total = _round_paisa(raw_cgst)
+    sgst_total = _round_paisa(raw_sgst)
+
     return BillTotals(
         lines=line_results,
-        subtotal=_round_paisa(raw_subtotal),
-        cgst_total=_round_paisa(raw_cgst),
-        sgst_total=_round_paisa(raw_sgst),
-        grand_total=_round_paisa(raw_subtotal + raw_cgst + raw_sgst),
+        subtotal=subtotal,
+        cgst_total=cgst_total,
+        sgst_total=sgst_total,
+        # grand_total must be the sum of the already-rounded components, not an
+        # independent rounding of the raw combined sum. Otherwise the persisted
+        # tax breakup (subtotal + cgst_total + sgst_total) can be a paisa off
+        # from grand_total on sub-paisa amounts.
+        grand_total=subtotal + cgst_total + sgst_total,
     )
