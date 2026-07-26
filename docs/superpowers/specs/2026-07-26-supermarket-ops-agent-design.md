@@ -98,7 +98,7 @@ Tool contract: each tool validates input shape and calls exactly one Service met
 
 - **Idempotent finalize**: `finalize_bill` runs inside `BEGIN IMMEDIATE`; first checks `processed_updates(telegram_update_id)` — if seen, returns the prior `bill_id` as a no-op instead of re-billing.
 - **Oversell guard**: inside the same transaction, `qty_on_hand >= requested` is checked per line before any write; insufficient stock aborts the whole finalize with no partial writes.
-- **Concurrent writers** (two bills, or a bill + a stock receipt, in flight): SQLite WAL mode + `BEGIN IMMEDIATE` serializes writers while keeping reads unblocked — sufficient for single-instance, single-file scale.
+- **Concurrent writers** (two bills, or a bill + a stock receipt, in flight): SQLite WAL mode + `BEGIN IMMEDIATE` serializes writers — sufficient for single-instance, single-file scale. In this implementation `BEGIN IMMEDIATE` is issued for every transaction, including reads, so a read can briefly block behind a write (not the "readers never block" property WAL is often chosen for); harmless at the single-owner scale this project targets (§1 non-goals), tracked as a Phase 5 follow-up if concurrent multi-request handling is ever added.
 - **Multi-turn bills**: `draft_bills` keyed by `chat_id` persists the in-progress bill outside the model's context — a process restart mid-build does not lose the draft, and stock is untouched until `finalize_bill` commits.
 
 ## 6. Memory (cross-session)
