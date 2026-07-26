@@ -21,11 +21,16 @@ def make_engine(db_path: str) -> Engine:
 
     @event.listens_for(engine, "connect")
     def _set_pragmas(dbapi_connection, _connection_record):
+        dbapi_connection.isolation_level = None  # hand transaction control to SQLAlchemy's "begin" event below
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
+
+    @event.listens_for(engine, "begin")
+    def _begin_immediate(conn):
+        conn.exec_driver_sql("BEGIN IMMEDIATE")
 
     return engine
 
