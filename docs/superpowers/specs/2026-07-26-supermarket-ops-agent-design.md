@@ -127,7 +127,21 @@ Tool contract: each tool validates input shape and calls exactly one Service met
 - Tool layer gets thin contract tests (input validation, refusal shapes).
 - End-to-end: manual Telegram scenarios per the brief's §3 table, recorded for the submission video.
 
-## 10. Open risks / assumptions
+## 10. Environments (local / stage / prod)
+
+Single codebase. `ENV` var selects config (DB path, bot token, log level) via pydantic-settings loading `.env.<env>` — no env-specific branching beyond config load. `.env.example` is committed as the template; `.env.local`, `.env.stage`, `.env.prod` are gitignored.
+
+**Channel adapter split**: `TelegramChannel` and `CLIChannel` both wrap the same `AgentSession` / tool surface. Local dev iterates against `CLIChannel` (a REPL) without a Telegram round-trip — same code path as prod, no divergent logic, much faster inner loop.
+
+| Env | Purpose | Bot | DB | Deploy |
+|---|---|---|---|---|
+| **local** (priority now) | day-to-day dev iteration | `CLIChannel` REPL (no Telegram needed); optional dev bot token for occasional Telegram smoke-check | `./data/local.db`, gitignored, seeded via `scripts/seed_dev_data.py` (Aashirvaad atta, Tata Salt, Amul Butter, etc. preloaded) | `python -m app.run --env=local` |
+| **stage** | pre-review smoke test, mirrors prod config | separate Fly.io app (`kirana-ops-agent-stage`), separate bot token | separate Fly volume | `fly deploy -a kirana-ops-agent-stage` |
+| **prod** | what reviewers message | live bot token, kept running | Fly volume, persistent | `fly deploy -a kirana-ops-agent` |
+
+Secrets: `ANTHROPIC_API_KEY` + `TELEGRAM_BOT_TOKEN` via `fly secrets set` (stage/prod) or `.env.local` (local, gitignored).
+
+## 11. Open risks / assumptions
 
 - Assumes intra-state GST only (CGST+SGST), per brief — no IGST path.
 - Single owner per store, single store per bot instance — no multi-tenant auth.
