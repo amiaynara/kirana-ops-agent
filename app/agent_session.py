@@ -1,6 +1,13 @@
+import asyncio
+import sys
 from pathlib import Path
 
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, create_sdk_mcp_server
+from claude_agent_sdk import (
+    ClaudeAgentOptions,
+    ClaudeSDKClient,
+    ResultMessage,
+    create_sdk_mcp_server,
+)
 
 from app.services.billing import BillingService
 from app.services.inventory import InventoryService
@@ -65,18 +72,36 @@ class AgentSession:
         )
         self._client = ClaudeSDKClient(options=self._options)
         self._connected = False
+        self._lock = asyncio.Lock()
 
     async def send(self, text: str, *, update_id: str) -> str:
-        self._update_context.current_update_id = update_id
-        if not self._connected:
-            await self._client.connect()
-            self._connected = True
-        await self._client.query(text)
-        result_text = ""
-        async for message in self._client.receive_response():
-            if type(message).__name__ == "ResultMessage":
-                result_text = message.result or ""
-        return result_text
+        async with self._lock:
+            try:
+                self._update_context.current_update_id = update_id
+                if not self._connected:
+                    await self._client.connect()
+                    self._connected = True
+                await self._client.query(text)
+                result_text = ""
+                async for message in self._client.receive_response():
+                    if isinstance(message, ResultMessage):
+                        if message.is_error:
+                            print(
+                                f"[agent_session] chat_id={self.chat_id} "
+                                f"update_id={update_id} dead turn "
+                                f"subtype={message.subtype} errors={message.errors}",
+                                file=sys.stderr,
+                            )
+                            result_text = (
+                                "Something went wrong on my end and I couldn't finish "
+                                "that -- please check 'show the bill' or 'how much "
+                                "stock is left' before trying again."
+                            )
+                        else:
+                            result_text = message.result or ""
+                return result_text
+            finally:
+                self._update_context.current_update_id = None
 
     async def close(self):
         if self._connected:

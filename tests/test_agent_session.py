@@ -1,3 +1,7 @@
+import asyncio
+
+from mcp import types as mcp_types
+
 from app.agent_session import AgentSession
 from app.db import Base, make_engine, make_session_factory
 
@@ -21,6 +25,25 @@ def test_agent_session_constructs_with_all_tool_domains_registered(tmp_path):
     assert session._options.strict_mcp_config is True
     assert session._options.permission_mode == "bypassPermissions"
     assert session.chat_id == "test-chat"
+
+    # Options that make Skills actually discoverable/usable -- a regression
+    # here fails open (skills silently become undiscoverable, no crash).
+    assert session._options.setting_sources == ["project"]
+    assert session._options.skills == "all"
+    assert session._options.cwd == str(session._options.cwd)  # sanity: it's set to something
+    assert session._options.max_turns == 20
+
+    # Confirm all 17 tools actually made it into the MCP server config (not
+    # just into `_all_tools`). `McpSdkServerConfig["instance"]` is a private
+    # mcp.server.lowlevel.server.Server; its registered list_tools handler is
+    # the only way to introspect what Claude will actually see, so we invoke
+    # it directly via the low-level mcp request/response types.
+    mcp_server = session._options.mcp_servers["kirana"]["instance"]
+    list_tools_handler = mcp_server.request_handlers[mcp_types.ListToolsRequest]
+    list_tools_result = asyncio.run(
+        list_tools_handler(mcp_types.ListToolsRequest(method="tools/list"))
+    )
+    assert len(list_tools_result.root.tools) == 17
 
 
 def test_agent_session_injects_existing_preferences_into_system_prompt(tmp_path):
