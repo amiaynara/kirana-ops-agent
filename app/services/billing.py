@@ -129,7 +129,14 @@ class BillingService:
                         gst_slab=product.gst_slab,
                     ))
 
-                # Validate every line before writing any of them.
+                # Validate every line before writing any of them. Note: this
+                # validate-then-write ordering is defense in depth, not the
+                # source of the atomicity guarantee. The actual guarantee that
+                # no partial writes are ever persisted comes from this whole
+                # method running inside a single `session.begin()` block
+                # (opened above) — any exception raised anywhere in this
+                # block, including mid-way through the write loop below, rolls
+                # back everything written so far.
                 for line in lines:
                     product = products_by_id[line.product_id]
                     if product.qty_on_hand < line.qty:

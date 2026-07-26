@@ -83,6 +83,12 @@ def test_finalize_bill_is_idempotent_on_same_update_id(services):
 
 
 def test_finalize_bill_refuses_oversell_with_no_partial_writes(services):
+    # This is a regression test for the transaction boundary in finalize_bill:
+    # the whole method body runs inside one `with session.begin():` block, so
+    # any exception raised anywhere in it (including mid-way through writing
+    # bill items / stock movements) rolls back everything atomically. That is
+    # what guarantees no partial writes here - it is not a property of the
+    # order in which lines are validated vs. written.
     inventory, billing, session_factory = services
     ok_product_id = _make_product(inventory, qty=Decimal("10"))
     oversell_product_id = inventory.create_product(
@@ -130,3 +136,20 @@ def test_finalize_bill_raises_missing_payment_mode_when_none_ever_set(services):
 
     with pytest.raises(MissingPaymentModeError):
         billing.finalize_bill(chat_id="chat-1", telegram_update_id="u-1")
+
+
+def test_finalize_bill_payment_mode_argument_overrides_draft_default(services):
+    inventory, billing, session_factory = services
+    product_id = _make_product(inventory, qty=Decimal("10"))
+    billing.start_bill(chat_id="chat-1", payment_mode="upi")
+    billing.add_item(chat_id="chat-1", product_id=product_id, qty=Decimal("2"))
+
+    bill_id, is_duplicate = billing.finalize_bill(
+        chat_id="chat-1", telegram_update_id="u-1", payment_mode="cash", payment_ref="txn-123",
+    )
+
+    assert is_duplicate is False
+    with session_factory() as session:
+        bill = session.get(Bill, bill_id)
+        assert bill.payment_mode == "cash"
+        assert bill.payment_ref == "txn-123"
