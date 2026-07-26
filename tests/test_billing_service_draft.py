@@ -3,7 +3,12 @@ from decimal import Decimal
 import pytest
 
 from app.db import Base, make_engine, make_session_factory
-from app.errors import LineNotFoundError, NoDraftBillError, ProductNotFoundError
+from app.errors import (
+    LineNotFoundError,
+    NoDraftBillError,
+    ProductNotFoundError,
+    ValidationError,
+)
 from app.services.billing import BillingService
 from app.services.inventory import InventoryService
 
@@ -112,6 +117,23 @@ def test_cancel_bill_removes_draft(services):
     billing.cancel_bill(chat_id="chat-1")
     with pytest.raises(NoDraftBillError):
         billing.get_draft(chat_id="chat-1")
+
+
+def test_add_item_rejects_non_positive_qty(services):
+    inventory, billing = services
+    product_id = _make_product(inventory)
+    billing.start_bill(chat_id="chat-1")
+    with pytest.raises(ValidationError):
+        billing.add_item(chat_id="chat-1", product_id=product_id, qty=Decimal("0"))
+
+
+def test_update_item_rejects_non_positive_qty(services):
+    inventory, billing = services
+    product_id = _make_product(inventory)
+    billing.start_bill(chat_id="chat-1")
+    billing.add_item(chat_id="chat-1", product_id=product_id, qty=Decimal("2"))
+    with pytest.raises(ValidationError):
+        billing.update_item(chat_id="chat-1", product_id=product_id, qty=Decimal("-1"))
 
 
 def test_start_bill_overwrites_prior_incomplete_draft(services):

@@ -52,6 +52,12 @@ def test_credit_customer_rejects_non_positive_amount(khata):
         khata.credit_customer(customer_name="Ramesh", amount=Decimal("0"))
 
 
+def test_settle_khata_rejects_non_positive_amount(khata):
+    khata.credit_customer(customer_name="Ramesh", amount=Decimal("500"))
+    with pytest.raises(ValidationError):
+        khata.settle_khata(customer_name="Ramesh", amount=Decimal("0"))
+
+
 def test_credit_customer_treats_underscore_and_percent_as_literal_characters(khata):
     # Test underscore as literal character, not SQL wildcard
     khata.credit_customer(customer_name="Ram_sh", amount=Decimal("111"))

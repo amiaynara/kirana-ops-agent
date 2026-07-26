@@ -2,7 +2,12 @@ from decimal import Decimal
 
 from sqlalchemy import func
 
-from app.errors import BelowCostError, ProductNotFoundError, ValidationError
+from app.errors import (
+    AmbiguousProductError,
+    BelowCostError,
+    ProductNotFoundError,
+    ValidationError,
+)
 from app.models import Product, StockMovement
 
 ALLOWED_UNITS = {"kg", "g", "litre", "ml", "packet", "dozen", "piece"}
@@ -80,9 +85,14 @@ class InventoryService:
         # named product. Do not touch the returned object after the session
         # factory's context has closed.
         with self._session_factory() as session:
-            return session.query(Product).filter(
+            matches = session.query(Product).filter(
                 func.lower(Product.name) == name.lower()
-            ).one_or_none()
+            ).all()
+            if not matches:
+                return None
+            if len(matches) == 1:
+                return matches[0]
+            raise AmbiguousProductError(name, [p.id for p in matches])
 
     def list_products(self):
         with self._session_factory() as session:

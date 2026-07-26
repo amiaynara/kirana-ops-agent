@@ -3,7 +3,12 @@ from decimal import Decimal
 import pytest
 
 from app.db import Base, make_engine, make_session_factory
-from app.errors import BelowCostError, ProductNotFoundError, ValidationError
+from app.errors import (
+    AmbiguousProductError,
+    BelowCostError,
+    ProductNotFoundError,
+    ValidationError,
+)
 from app.models import Product
 from app.services.inventory import InventoryService
 
@@ -135,6 +140,32 @@ def test_find_product_by_name_is_case_insensitive(inventory):
 
 def test_find_product_by_name_returns_none_for_unknown(inventory):
     assert inventory.find_product_by_name(name="Nonexistent Product") is None
+
+
+def test_find_product_by_name_raises_when_multiple_products_share_a_name(inventory):
+    inventory.create_product(
+        name="Duplicate Item", category="fmcg", unit="packet", is_loose=False,
+        hsn_code="11111111", gst_slab=5, cost_price=Decimal("10.00"),
+        sell_price=Decimal("12.00"), mrp=Decimal("15.00"), reorder_level=Decimal("5"),
+    )
+    inventory.create_product(
+        name="Duplicate Item", category="fmcg", unit="packet", is_loose=False,
+        hsn_code="22222222", gst_slab=5, cost_price=Decimal("20.00"),
+        sell_price=Decimal("25.00"), mrp=Decimal("30.00"), reorder_level=Decimal("5"),
+    )
+    with pytest.raises(AmbiguousProductError):
+        inventory.find_product_by_name(name="Duplicate Item")
+
+
+def test_receive_stock_rejects_non_positive_qty(inventory):
+    product_id = inventory.create_product(
+        name="Fortune Oil 1L", category="staples", unit="packet", is_loose=False,
+        hsn_code="15121900", gst_slab=5, cost_price=Decimal("140.00"),
+        sell_price=Decimal("165.00"), mrp=Decimal("175.00"), reorder_level=Decimal("5"),
+        initial_qty=Decimal("10"),
+    )
+    with pytest.raises(ValidationError):
+        inventory.receive_stock(product_id=product_id, qty=Decimal("0"))
 
 
 def test_list_products_returns_all_in_name_order(inventory):
