@@ -103,3 +103,37 @@ def test_create_product_is_error_below_cost(tmp_path):
         "mrp": "60.00", "reorder_level": "1",
     }))
     assert result.get("is_error") is True
+
+
+def test_get_stock_is_error_for_ambiguous_product_name(tmp_path):
+    inventory = _make_inventory(tmp_path)
+    inventory.create_product(
+        name="Dup Product", category="fmcg", unit="packet", is_loose=False,
+        hsn_code="00000000", gst_slab=0, cost_price=Decimal("1"), sell_price=Decimal("2"),
+        mrp=Decimal("2"), reorder_level=Decimal("1"),
+    )
+    inventory.create_product(
+        name="DUP PRODUCT", category="fmcg", unit="packet", is_loose=False,
+        hsn_code="00000001", gst_slab=0, cost_price=Decimal("1"), sell_price=Decimal("2"),
+        mrp=Decimal("2"), reorder_level=Decimal("1"),
+    )
+    tools = _tools_by_name(inventory)
+    result = asyncio.run(tools["get_stock"].handler({"product_name": "dup product"}))
+    assert result.get("is_error") is True
+
+
+def test_receive_stock_is_error_for_ambiguous_product_name(tmp_path):
+    inventory = _make_inventory(tmp_path)
+    inventory.create_product(
+        name="Dup Product", category="fmcg", unit="packet", is_loose=False,
+        hsn_code="00000000", gst_slab=0, cost_price=Decimal("1"), sell_price=Decimal("2"),
+        mrp=Decimal("2"), reorder_level=Decimal("1"),
+    )
+    inventory.create_product(
+        name="DUP PRODUCT", category="fmcg", unit="packet", is_loose=False,
+        hsn_code="00000001", gst_slab=0, cost_price=Decimal("1"), sell_price=Decimal("2"),
+        mrp=Decimal("2"), reorder_level=Decimal("1"),
+    )
+    tools = _tools_by_name(inventory)
+    result = asyncio.run(tools["receive_stock"].handler({"product_name": "dup product", "qty": "5"}))
+    assert result.get("is_error") is True

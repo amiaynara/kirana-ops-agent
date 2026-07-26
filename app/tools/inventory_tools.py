@@ -11,7 +11,10 @@ def build_inventory_tools(inventory: InventoryService):
     @tool("get_stock", "Look up current stock quantity for a product by its exact name.",
           {"product_name": str})
     async def get_stock(args):
-        product = await asyncio.to_thread(inventory.find_product_by_name, name=args["product_name"])
+        try:
+            product = await asyncio.to_thread(inventory.find_product_by_name, name=args["product_name"])
+        except DomainError as exc:
+            return {"content": [{"type": "text", "text": f"Refused: {exc}"}], "is_error": True}
         if product is None:
             return {"content": [{"type": "text", "text": f"No product found named {args['product_name']!r}."}],
                     "is_error": True}
@@ -49,7 +52,10 @@ def build_inventory_tools(inventory: InventoryService):
         },
     )
     async def receive_stock(args):
-        product = await asyncio.to_thread(inventory.find_product_by_name, name=args["product_name"])
+        try:
+            product = await asyncio.to_thread(inventory.find_product_by_name, name=args["product_name"])
+        except DomainError as exc:
+            return {"content": [{"type": "text", "text": f"Refused: {exc}"}], "is_error": True}
         if product is None:
             return {"content": [{"type": "text", "text": f"No product found named {args['product_name']!r}."}],
                     "is_error": True}
