@@ -3,8 +3,7 @@ __pycache__/
 .venv/
 venv/
 data/
-.env.local
-.env.stage
-.env.prod
+.env*
+!.env.example
 *.egg-info/
 .pytest_cache/
