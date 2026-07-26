@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 
 from app.db import Base, make_engine, make_session_factory
-from app.errors import CustomerNotFoundError
+from app.errors import CustomerNotFoundError, ValidationError
 from app.services.khata import KhataService
 
 
@@ -48,7 +48,7 @@ def test_get_balance_raises_for_unknown_customer(khata):
 
 
 def test_credit_customer_rejects_non_positive_amount(khata):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         khata.credit_customer(customer_name="Ramesh", amount=Decimal("0"))
 
 

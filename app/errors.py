@@ -45,3 +45,8 @@ class MissingPaymentModeError(DomainError):
     def __init__(self, chat_id):
         self.chat_id = chat_id
         super().__init__(f"No payment mode set for chat {chat_id} — say cash, UPI, or card")
+
+
+class ValidationError(DomainError):
+    def __init__(self, message):
+        super().__init__(message)

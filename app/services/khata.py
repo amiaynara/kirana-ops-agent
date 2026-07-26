@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from sqlalchemy import func
 
-from app.errors import CustomerNotFoundError
+from app.errors import CustomerNotFoundError, ValidationError
 from app.models import Customer, KhataLedger
 
 
@@ -21,7 +21,7 @@ class KhataService:
 
     def credit_customer(self, *, customer_name, amount, note=None):
         if amount <= 0:
-            raise ValueError("amount must be positive")
+            raise ValidationError("amount must be positive")
         with self._session_factory() as session:
             with session.begin():
                 customer = self._find_customer(session, customer_name)
@@ -35,7 +35,7 @@ class KhataService:
 
     def settle_khata(self, *, customer_name, amount, note=None):
         if amount <= 0:
-            raise ValueError("amount must be positive")
+            raise ValidationError("amount must be positive")
         with self._session_factory() as session:
             with session.begin():
                 customer = self._find_customer(session, customer_name)
