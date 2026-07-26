@@ -64,23 +64,24 @@ def test_begin_immediate_prevents_lost_update_on_concurrent_read_then_write(tmp_
         with session.begin():
             session.add(_Counter(id=1, value=0))
 
-    both_read = threading.Barrier(2)
     errors = []
+    started = threading.Event()
 
     def increment():
         try:
             with Session() as session:
                 with session.begin():
+                    started.set()
                     counter = session.get(_Counter, 1)
-                    both_read.wait()
-                    time.sleep(0.05)
+                    time.sleep(0.1)
                     counter.value += 1
         except Exception as exc:  # noqa: BLE001 - capturing the failure mode under test
             errors.append(exc)
 
     t1 = threading.Thread(target=increment)
-    t2 = threading.Thread(target=increment)
     t1.start()
+    assert started.wait(timeout=5), "t1 never entered its transaction"
+    t2 = threading.Thread(target=increment)
     t2.start()
     t1.join(timeout=10)
     t2.join(timeout=10)
@@ -90,10 +91,12 @@ def test_begin_immediate_prevents_lost_update_on_concurrent_read_then_write(tmp_
         assert session.get(_Counter, 1).value == 2
 ```
 
+`started.wait()` only confirms t1 has entered its transaction before t2 starts — it does not force both threads to synchronize *inside* their transactions (a barrier there would deadlock: under `BEGIN IMMEDIATE`, t2's `session.begin()` line itself blocks on t1's held lock, so t2 could never reach a barrier positioned after `session.begin()`). t2 is meant to block on the real SQLite lock while t1 holds it — that blocking, and t2 proceeding only once t1 commits, is exactly the behavior this task verifies.
+
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_concurrency_db.py -v`
-Expected: FAIL. Either an exception is captured in `errors` (a `sqlite3.OperationalError` / `sqlalchemy.exc.OperationalError` mentioning the database being locked or busy), or the final assertion fails because `value == 1` instead of `2` (a lost update — both threads read `0`, both wrote `1`). Either failure mode demonstrates the gap this task closes.
+Expected: FAIL. Pre-fix, both transactions use SQLite's default deferred begin, so t2's `session.begin()` does not block on t1 — t2 reads the same pre-update snapshot (`value=0`) while t1 is still sleeping, then t1 commits (`value=1`) before t2 tries to commit its own stale-snapshot write, which SQLite refuses. This surfaces as an `OperationalError` captured in `errors` (assert `not errors` fails) — the exact message varies by SQLite version, so don't assert its text, only that the run fails via this or a `value == 1` lost-update outcome.
 
 - [ ] **Step 3: Write minimal implementation**
 
