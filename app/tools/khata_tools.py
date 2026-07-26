@@ -1,18 +1,21 @@
 import asyncio
-from decimal import Decimal
 
 from claude_agent_sdk import tool
 
 from app.errors import DomainError
+from app.tools.decimal_parsing import parse_decimal
 
 
 def build_khata_tools(khata):
     @tool("credit_customer", "Add an amount to a customer's khata (credit) balance.",
           {"customer_name": str, "amount": str})
     async def credit_customer(args):
+        amount, error = parse_decimal(args["amount"], field_name="amount")
+        if error is not None:
+            return error
         try:
             await asyncio.to_thread(
-                khata.credit_customer, customer_name=args["customer_name"], amount=Decimal(args["amount"]),
+                khata.credit_customer, customer_name=args["customer_name"], amount=amount,
             )
         except DomainError as exc:
             return {"content": [{"type": "text", "text": f"Refused: {exc}"}], "is_error": True}
@@ -22,9 +25,12 @@ def build_khata_tools(khata):
     @tool("settle_khata", "Record a payment against a customer's existing khata balance.",
           {"customer_name": str, "amount": str})
     async def settle_khata(args):
+        amount, error = parse_decimal(args["amount"], field_name="amount")
+        if error is not None:
+            return error
         try:
             await asyncio.to_thread(
-                khata.settle_khata, customer_name=args["customer_name"], amount=Decimal(args["amount"]),
+                khata.settle_khata, customer_name=args["customer_name"], amount=amount,
             )
         except DomainError as exc:
             return {"content": [{"type": "text", "text": f"Refused: {exc}"}], "is_error": True}

@@ -122,6 +122,19 @@ def test_get_stock_is_error_for_ambiguous_product_name(tmp_path):
     assert result.get("is_error") is True
 
 
+def test_receive_stock_is_error_for_malformed_qty(tmp_path):
+    inventory = _make_inventory(tmp_path)
+    inventory.create_product(
+        name="Maggi 70g", category="fmcg", unit="packet", is_loose=False,
+        hsn_code="19023090", gst_slab=12, cost_price=Decimal("10.00"),
+        sell_price=Decimal("14.00"), mrp=Decimal("14.00"), reorder_level=Decimal("20"),
+        initial_qty=Decimal("10"),
+    )
+    tools = _tools_by_name(inventory)
+    result = asyncio.run(tools["receive_stock"].handler({"product_name": "Maggi 70g", "qty": "not-a-number"}))
+    assert result.get("is_error") is True
+
+
 def test_receive_stock_is_error_for_ambiguous_product_name(tmp_path):
     inventory = _make_inventory(tmp_path)
     inventory.create_product(

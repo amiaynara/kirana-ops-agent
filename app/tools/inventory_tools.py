@@ -5,6 +5,7 @@ from claude_agent_sdk import tool
 
 from app.errors import DomainError
 from app.services.inventory import InventoryService
+from app.tools.decimal_parsing import parse_decimal
 
 
 def build_inventory_tools(inventory: InventoryService):
@@ -59,12 +60,20 @@ def build_inventory_tools(inventory: InventoryService):
         if product is None:
             return {"content": [{"type": "text", "text": f"No product found named {args['product_name']!r}."}],
                     "is_error": True}
+        qty, error = parse_decimal(args["qty"], field_name="qty")
+        if error is not None:
+            return error
+        cost_price = None
+        if args.get("cost_price"):
+            cost_price, error = parse_decimal(args["cost_price"], field_name="cost_price")
+            if error is not None:
+                return error
         try:
             await asyncio.to_thread(
                 inventory.receive_stock,
                 product_id=product.id,
-                qty=Decimal(args["qty"]),
-                cost_price=Decimal(args["cost_price"]) if args.get("cost_price") else None,
+                qty=qty,
+                cost_price=cost_price,
             )
         except DomainError as exc:
             return {"content": [{"type": "text", "text": f"Refused: {exc}"}], "is_error": True}
@@ -94,14 +103,31 @@ def build_inventory_tools(inventory: InventoryService):
         },
     )
     async def create_product(args):
+        cost_price, error = parse_decimal(args["cost_price"], field_name="cost_price")
+        if error is not None:
+            return error
+        sell_price, error = parse_decimal(args["sell_price"], field_name="sell_price")
+        if error is not None:
+            return error
+        mrp, error = parse_decimal(args["mrp"], field_name="mrp")
+        if error is not None:
+            return error
+        reorder_level, error = parse_decimal(args["reorder_level"], field_name="reorder_level")
+        if error is not None:
+            return error
+        initial_qty = Decimal("0")
+        if args.get("initial_qty"):
+            initial_qty, error = parse_decimal(args["initial_qty"], field_name="initial_qty")
+            if error is not None:
+                return error
         try:
             product_id = await asyncio.to_thread(
                 inventory.create_product,
                 name=args["name"], category=args["category"], unit=args["unit"],
                 is_loose=args["is_loose"], hsn_code=args["hsn_code"], gst_slab=args["gst_slab"],
-                cost_price=Decimal(args["cost_price"]), sell_price=Decimal(args["sell_price"]),
-                mrp=Decimal(args["mrp"]), reorder_level=Decimal(args["reorder_level"]),
-                initial_qty=Decimal(args["initial_qty"]) if args.get("initial_qty") else Decimal("0"),
+                cost_price=cost_price, sell_price=sell_price,
+                mrp=mrp, reorder_level=reorder_level,
+                initial_qty=initial_qty,
             )
         except DomainError as exc:
             return {"content": [{"type": "text", "text": f"Refused: {exc}"}], "is_error": True}

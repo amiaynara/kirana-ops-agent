@@ -20,6 +20,12 @@ def test_credit_customer_creates_and_reports(tmp_path):
     assert khata.get_balance(customer_name="Ramesh") == Decimal("500")
 
 
+def test_credit_customer_is_error_for_malformed_amount(tmp_path):
+    tools, khata = _tools_by_name(tmp_path)
+    result = asyncio.run(tools["credit_customer"].handler({"customer_name": "Ramesh", "amount": "not-a-number"}))
+    assert result.get("is_error") is True
+
+
 def test_settle_khata_reduces_balance(tmp_path):
     tools, khata = _tools_by_name(tmp_path)
     asyncio.run(tools["credit_customer"].handler({"customer_name": "Ramesh", "amount": "500"}))

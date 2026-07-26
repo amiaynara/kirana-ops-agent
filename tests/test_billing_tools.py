@@ -67,6 +67,15 @@ def test_add_bill_item_is_error_for_unknown_product(tmp_path):
     assert result.get("is_error") is True
 
 
+def test_add_bill_item_is_error_for_malformed_qty(tmp_path):
+    inventory, billing = _make_services(tmp_path)
+    _make_product(inventory)
+    tools = _tools_by_name(billing, inventory)
+    asyncio.run(tools["start_bill"].handler({}))
+    result = asyncio.run(tools["add_bill_item"].handler({"product_name": "Tata Salt 1kg", "qty": "not-a-number"}))
+    assert result.get("is_error") is True
+
+
 def test_update_bill_item_changes_qty(tmp_path):
     inventory, billing = _make_services(tmp_path)
     _make_product(inventory)

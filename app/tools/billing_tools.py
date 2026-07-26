@@ -1,10 +1,10 @@
 import asyncio
 from dataclasses import dataclass
-from decimal import Decimal
 
 from claude_agent_sdk import tool
 
 from app.errors import DomainError
+from app.tools.decimal_parsing import parse_decimal
 
 
 @dataclass
@@ -52,9 +52,12 @@ def build_billing_tools(billing, inventory, chat_id: str, update_context: Update
         if product is None:
             return {"content": [{"type": "text", "text": f"No product found named {args['product_name']!r}."}],
                     "is_error": True}
+        qty, error = parse_decimal(args["qty"], field_name="qty")
+        if error is not None:
+            return error
         try:
             await asyncio.to_thread(
-                billing.add_item, chat_id=chat_id, product_id=product.id, qty=Decimal(args["qty"]),
+                billing.add_item, chat_id=chat_id, product_id=product.id, qty=qty,
             )
         except DomainError as exc:
             return {"content": [{"type": "text", "text": f"Refused: {exc}"}], "is_error": True}
@@ -70,9 +73,12 @@ def build_billing_tools(billing, inventory, chat_id: str, update_context: Update
         if product is None:
             return {"content": [{"type": "text", "text": f"No product found named {args['product_name']!r}."}],
                     "is_error": True}
+        qty, error = parse_decimal(args["qty"], field_name="qty")
+        if error is not None:
+            return error
         try:
             await asyncio.to_thread(
-                billing.update_item, chat_id=chat_id, product_id=product.id, qty=Decimal(args["qty"]),
+                billing.update_item, chat_id=chat_id, product_id=product.id, qty=qty,
             )
         except DomainError as exc:
             return {"content": [{"type": "text", "text": f"Refused: {exc}"}], "is_error": True}
