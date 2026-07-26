@@ -25,6 +25,14 @@ def test_make_engine_enables_foreign_keys(tmp_path):
     assert fk == 1
 
 
+def test_make_engine_enables_busy_timeout(tmp_path):
+    db_path = tmp_path / "test.db"
+    engine = make_engine(str(db_path))
+    with engine.connect() as conn:
+        timeout = conn.execute(text("PRAGMA busy_timeout")).scalar()
+    assert timeout == 5000
+
+
 def test_create_all_and_session_roundtrip(tmp_path):
     db_path = tmp_path / "test.db"
     engine = make_engine(str(db_path))
