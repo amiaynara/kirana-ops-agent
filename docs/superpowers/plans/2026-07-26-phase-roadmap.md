@@ -33,12 +33,14 @@ Local-first priority: Phases 0–2 get you a fully working, testable agent on yo
 
 ## Phase 4 — Artifacts: PDF invoice + PPTX analysis deck
 - `InvoiceService` (reportlab): GST-correct tax-breakup PDF from `bills`/`bill_items`
+- **Known tradeoff to handle on the invoice layout**: `compute_bill_totals` (Phase 1) reconciles each `BillItem.line_total` with its own rounded subtotal+cgst+sgst, and separately reconciles `Bill.grand_total` with the bill's own rounded subtotal+cgst+sgst — by design these two reconciliations don't force `sum(bill_items.line_total) == bills.grand_total` on a multi-line bill with sub-paisa amounts (that's the intentional anti-drift behavior: rounding once at the bill level from the true unrounded sum, not by re-summing already-rounded lines). The invoice PDF needs an explicit "round off" line (standard on real GST invoices) showing `grand_total - sum(line_totals)` so the printed breakup visibly reconciles instead of silently being off by a paisa.
 - `AnalyticsService` (matplotlib + python-pptx): `get_daily_summary`, `render_analysis_deck`
 - `invoicing` + `analytics` Skills, their tools wired into agent
 
 ## Phase 5 — Deployment: local run docs, stage, prod
 - Dockerfile, `fly.toml`, Fly volumes/secrets for `kirana-ops-agent-stage` and `kirana-ops-agent`
 - README local-setup section (this phase matters most right now — everything above should already run local via `CLIChannel` without this phase existing)
+- **Known tradeoff to revisit if concurrent load ever grows past single-shop scale**: Phase 1's `app/db.py` issues `BEGIN IMMEDIATE` unconditionally for every transaction, including read-only ones (`get_stock`, `get_draft`, `list_low_stock`, `get_balance`) — SQLAlchemy's session autobegin fires the same engine `begin` event regardless of read/write intent. This means a read can block behind a write's lock (measured ~1s under contention), which is correct but not the "reads stay unblocked" property WAL is usually chosen for. Harmless at the explicitly-scoped single-owner/single-shop scale (see design spec §2 non-goals), but if a future phase adds concurrent multi-request handling, split into a write-tagged session factory (`engine.execution_options(...)` + a `begin`-listener check) so only genuine write transactions escalate to `IMMEDIATE`.
 
 ## Phase 6 — Hardening & submission polish
 - Guardrail refusal tests (below-cost sale, settle nonexistent khata, delete-stock refusal)
