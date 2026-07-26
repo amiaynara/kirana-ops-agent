@@ -8,6 +8,7 @@ from app.errors import (
     MissingPaymentModeError,
     NoDraftBillError,
     ProductNotFoundError,
+    ValidationError,
 )
 from app.models import Bill, BillItem, DraftBill, Product, ProcessedUpdate, StockMovement
 
@@ -29,7 +30,7 @@ class BillingService:
 
     def add_item(self, *, chat_id, product_id, qty):
         if qty <= 0:
-            raise ValueError("qty must be positive")
+            raise ValidationError("qty must be positive")
         with self._session_factory() as session:
             with session.begin():
                 draft = session.get(DraftBill, chat_id)
@@ -45,7 +46,7 @@ class BillingService:
 
     def update_item(self, *, chat_id, product_id, qty):
         if qty <= 0:
-            raise ValueError("qty must be positive")
+            raise ValidationError("qty must be positive")
         with self._session_factory() as session:
             with session.begin():
                 draft = session.get(DraftBill, chat_id)
@@ -102,7 +103,7 @@ class BillingService:
         with self._session_factory() as session:
             with session.begin():
                 existing = session.get(ProcessedUpdate, telegram_update_id)
-                if existing is not None:
+                if existing is not None and existing.bill_id is not None:
                     return existing.bill_id, True
 
                 draft = session.get(DraftBill, chat_id)
@@ -167,7 +168,10 @@ class BillingService:
                         reason="sale", ref_bill_id=bill.id,
                     ))
 
-                session.add(ProcessedUpdate(telegram_update_id=telegram_update_id, bill_id=bill.id))
+                if existing is not None:
+                    existing.bill_id = bill.id
+                else:
+                    session.add(ProcessedUpdate(telegram_update_id=telegram_update_id, bill_id=bill.id))
                 session.delete(draft)
 
                 return bill.id, False

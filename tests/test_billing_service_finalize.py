@@ -4,7 +4,7 @@ import pytest
 
 from app.db import Base, make_engine, make_session_factory
 from app.errors import InsufficientStockError, MissingPaymentModeError, NoDraftBillError
-from app.models import Bill, BillItem, DraftBill, StockMovement
+from app.models import Bill, BillItem, DraftBill, ProcessedUpdate, StockMovement
 from app.services.billing import BillingService
 from app.services.inventory import InventoryService
 
@@ -114,6 +114,36 @@ def test_finalize_bill_refuses_oversell_with_no_partial_writes(services):
     payment_mode, totals = billing.get_draft(chat_id="chat-1")
     assert payment_mode == "cash"
     assert len(totals.lines) == 2
+
+
+def test_finalize_bill_is_not_fooled_by_a_null_bill_id_processed_update(services):
+    inventory, billing, session_factory = services
+    product_id = _make_product(inventory, qty=Decimal("10"))
+    billing.start_bill(chat_id="chat-1", payment_mode="upi")
+    billing.add_item(chat_id="chat-1", product_id=product_id, qty=Decimal("2"))
+
+    # Simulate some other action (e.g. credit_customer) having already
+    # claimed this telegram_update_id for dedup purposes, with no bill
+    # attached.
+    with session_factory() as session:
+        with session.begin():
+            session.add(ProcessedUpdate(telegram_update_id="shared-update-id", bill_id=None))
+
+    bill_id_1, is_duplicate_1 = billing.finalize_bill(
+        chat_id="chat-1", telegram_update_id="shared-update-id",
+    )
+
+    assert is_duplicate_1 is False
+    assert isinstance(bill_id_1, int)
+    assert inventory.get_stock(product_id=product_id) == Decimal("8")
+
+    bill_id_2, is_duplicate_2 = billing.finalize_bill(
+        chat_id="chat-1", telegram_update_id="shared-update-id",
+    )
+
+    assert is_duplicate_2 is True
+    assert bill_id_2 == bill_id_1
+    assert inventory.get_stock(product_id=product_id) == Decimal("8")  # unchanged from first call
 
 
 def test_finalize_bill_raises_without_a_draft(services):
