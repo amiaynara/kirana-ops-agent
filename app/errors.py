@@ -39,3 +39,9 @@ class LineNotFoundError(DomainError):
     def __init__(self, product_id):
         self.product_id = product_id
         super().__init__(f"No line for product {product_id} in the draft bill")
+
+
+class MissingPaymentModeError(DomainError):
+    def __init__(self, chat_id):
+        self.chat_id = chat_id
+        super().__init__(f"No payment mode set for chat {chat_id} — say cash, UPI, or card")

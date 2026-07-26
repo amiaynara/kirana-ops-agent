@@ -2,7 +2,13 @@ import json
 from decimal import Decimal
 
 from app.billing_math import BillLineInput, compute_bill_totals
-from app.errors import InsufficientStockError, LineNotFoundError, NoDraftBillError, ProductNotFoundError
+from app.errors import (
+    InsufficientStockError,
+    LineNotFoundError,
+    MissingPaymentModeError,
+    NoDraftBillError,
+    ProductNotFoundError,
+)
 from app.models import Bill, BillItem, DraftBill, Product, ProcessedUpdate, StockMovement
 
 
@@ -108,7 +114,7 @@ class BillingService:
 
                 resolved_mode = payment_mode or draft.payment_mode
                 if not resolved_mode:
-                    raise ValueError("payment_mode is required to finalize a bill")
+                    raise MissingPaymentModeError(chat_id)
 
                 lines = []
                 products_by_id = {}
