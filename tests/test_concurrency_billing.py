@@ -68,14 +68,17 @@ def test_concurrent_receive_stock_and_finalize_do_not_lose_updates(tmp_path):
     billing.add_item(chat_id="chat-c", product_id=product_id, qty=Decimal("4"))
 
     errors = {}
+    gate = threading.Barrier(2, timeout=5)
 
     def receive():
+        gate.wait()
         try:
             inventory.receive_stock(product_id=product_id, qty=Decimal("50"))
         except Exception as exc:  # noqa: BLE001 - capturing the failure mode under test
             errors["receive"] = exc
 
     def finalize():
+        gate.wait()
         try:
             billing.finalize_bill(chat_id="chat-c", telegram_update_id="update-c")
         except Exception as exc:  # noqa: BLE001 - capturing the failure mode under test
