@@ -73,3 +73,9 @@ def test_grand_total_reconciles_with_rounded_breakup_on_sub_paisa_amounts():
     assert result.cgst_total == Decimal("0.10")
     assert result.sgst_total == Decimal("0.10")
     assert result.grand_total == result.subtotal + result.cgst_total + result.sgst_total == Decimal("4.30")
+
+    # The same reconciliation must hold at the line level: a single-line bill's
+    # own line_total should equal the bill's grand_total (4.30, not 4.31).
+    line = result.lines[0]
+    assert line.line_total == line.line_subtotal + line.cgst_amt + line.sgst_amt == Decimal("4.30")
+    assert line.line_total == result.grand_total

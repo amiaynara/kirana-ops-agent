@@ -41,6 +41,7 @@ def test_finalize_bill_decrements_stock_and_returns_new_bill(services):
     with session_factory() as session:
         bill = session.get(Bill, bill_id)
         assert bill is not None
+        assert bill.payment_mode == "upi"  # fell back to the draft's default, no override passed
         assert bill.subtotal == Decimal("44.00")
         assert bill.cgst_total == Decimal("1.10")
         assert bill.sgst_total == Decimal("1.10")

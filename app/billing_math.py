@@ -55,16 +55,24 @@ def compute_bill_totals(lines: list[BillLineInput]) -> BillTotals:
         raw_cgst += cgst_amt
         raw_sgst += sgst_amt
 
+        rounded_line_subtotal = _round_paisa(line_subtotal)
+        rounded_cgst_amt = _round_paisa(cgst_amt)
+        rounded_sgst_amt = _round_paisa(sgst_amt)
+
         line_results.append(BillLineResult(
             product_id=line.product_id,
             product_name=line.product_name,
             qty=line.qty,
             unit_price=line.unit_price,
             gst_slab=line.gst_slab,
-            line_subtotal=_round_paisa(line_subtotal),
-            cgst_amt=_round_paisa(cgst_amt),
-            sgst_amt=_round_paisa(sgst_amt),
-            line_total=_round_paisa(line_subtotal + line_gst),
+            line_subtotal=rounded_line_subtotal,
+            cgst_amt=rounded_cgst_amt,
+            sgst_amt=rounded_sgst_amt,
+            # Same reconciliation rule as the bill-level grand_total below:
+            # sum the already-rounded components rather than independently
+            # rounding line_subtotal + line_gst, so a line's own total always
+            # equals its displayed subtotal + cgst + sgst.
+            line_total=rounded_line_subtotal + rounded_cgst_amt + rounded_sgst_amt,
         ))
 
     subtotal = _round_paisa(raw_subtotal)
