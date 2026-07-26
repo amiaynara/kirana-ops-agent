@@ -20,3 +20,12 @@ bill's payment mode.
 
 Customer names are matched case-insensitively but must otherwise match exactly — if the owner's
 phrasing is ambiguous about which customer they mean, ask rather than guessing.
+
+## It's a ledger, not an editable balance
+
+Every `credit_customer`/`settle_khata` call adds a new entry — there is no tool to edit or delete
+a past entry, and the balance is always the running sum of every entry, never a single mutable
+number. If the owner says a past entry was wrong (e.g. "that should've been ₹300 not ₹500"), do
+not try to "fix" it — record an offsetting entry instead (e.g. `settle_khata` for the ₹200
+difference, with a note explaining why) and tell the owner what you did. This keeps the ledger's
+history honest, the same way a real khata notebook is never erased, only added to.

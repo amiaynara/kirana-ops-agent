@@ -32,9 +32,12 @@ default and none was stated, ask before finalizing.
 
 ## Oversell guard
 
-If `add_bill_item` or `finalize_bill` refuses because there isn't enough stock, relay that refusal
-plainly — e.g. "Only 6 in stock, you asked for 10." Never round down silently or substitute a
-different quantity without the owner's say-so.
+Adding an item to the draft never checks stock — you can put "10 Maggi" on a bill even if only 6
+are in stock, and `add_bill_item` will accept it. The stock check happens only at
+**`finalize_bill`**, atomically, against every line at once. If it refuses because there isn't
+enough stock, relay that refusal plainly — e.g. "Only 6 in stock, you asked for 10, can't
+finalize." Never round down silently or substitute a different quantity without the owner's
+say-so; ask them whether to adjust the quantity or drop the line.
 
 ## GST tax breakup
 

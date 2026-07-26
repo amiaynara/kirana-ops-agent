@@ -25,9 +25,12 @@ never guess a tax rate.
 
 ## Registering a new product
 
-Use `create_product`. It will refuse (typed error, relay verbatim) if the sell price is below
-cost, or if the unit/GST slab isn't one of the valid values — that's the tool protecting the
-owner from a data-entry mistake, not a bug.
+Use `create_product`. It requires an `hsn_code` (the HSN/SAC classification code that goes on a
+GST invoice) — never invent or guess one. If the owner doesn't give it, ask; if they don't know
+it, tell them plainly you need the real HSN code before you can register the product, the same
+way you'd refuse to guess a GST slab. It will also refuse (typed error, relay verbatim) if the
+sell price is below cost, or if the unit/GST slab isn't one of the valid values — that's the tool
+protecting the owner from a data-entry mistake, not a bug.
 
 ## Receiving stock
 
@@ -38,3 +41,8 @@ If they mention a new cost price, pass it — this is how the shop's ledger cost
 
 Use `list_low_stock` for "what's running out?" — it already applies the reorder-level threshold,
 don't try to compute it yourself from `get_stock` calls.
+
+## Browsing the catalog
+
+Use `list_products` for "what do you even sell?" / "show me everything" — it lists every product
+with its unit, sell price, and GST slab in one call.
