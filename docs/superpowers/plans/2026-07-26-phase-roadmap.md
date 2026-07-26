@@ -6,12 +6,14 @@ Local-first priority: Phases 0–2 get you a fully working, testable agent on yo
 
 ## Phase 0 — Repo scaffolding & config
 - `pyproject.toml`, package layout (`app/`, `tests/`), pinned deps
-- `pydantic-settings` config, `ENV` var, `.env.example` + gitignored `.env.local`
-- SQLAlchemy engine/session setup, WAL mode pragma, `create_all` bootstrap
-- `scripts/seed_dev_data.py` — real SKUs (Aashirvaad Atta 5kg, Tata Salt 1kg, Amul Butter 100g, Fortune Oil 1L, Maggi 70g, Parle-G, Surf Excel, loose sugar/rice/dal)
+- `pydantic-settings` config, `ENV` var, `.env.example` + gitignored `.env.*`
+- SQLAlchemy engine/session setup, WAL mode pragma, `init_db()` helper (engine + `create_all`)
+- Seed script (`scripts/seed_dev_data.py`) deferred to Phase 1 — depends on the `Product` model
 
 ## Phase 1 — Data model & service layer (TDD, no agent involved)
+- **First task: `BEGIN IMMEDIATE` transaction wiring.** Phase 0's engine emits implicit `BEGIN DEFERRED` (pysqlite legacy mode) — under WAL, two concurrent writers both open fine and the second fails at write-upgrade with `SQLITE_BUSY_SNAPSHOT`, which `busy_timeout` does not retry. Needs `create_engine(..., isolation_level=None)` + a `begin` event listener emitting `BEGIN IMMEDIATE`, added to `make_engine` (behind a parameter) before any service method opens a transaction.
 - SQLAlchemy models: `products, customers, khata_ledger, draft_bills, bills, bill_items, stock_movements, owner_preferences, processed_updates`
+- `scripts/seed_dev_data.py` — real SKUs (Aashirvaad Atta 5kg, Tata Salt 1kg, Amul Butter 100g, Fortune Oil 1L, Maggi 70g, Parle-G, Surf Excel, loose sugar/rice/dal)
 - `InventoryService`: `receive_stock`, `create_product`, `get_stock`, `list_low_stock`, oversell-guard primitive
 - `BillingService`: `start_bill`, `add_item`, `update_item`, `drop_item`, `get_draft`, `finalize_bill` (idempotent, txn-wrapped, GST calc + CGST/SGST split + rounding), `cancel_bill`
 - `KhataService`: `credit_customer`, `settle_khata`, `get_balance`
