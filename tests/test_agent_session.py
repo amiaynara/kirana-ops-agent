@@ -5,7 +5,7 @@ import pytest
 from claude_agent_sdk import ResultMessage
 from mcp import types as mcp_types
 
-from app.agent_session import AgentSession
+from app.agent_session import AgentSession, SendResult
 from app.db import Base, make_engine, make_session_factory
 
 
@@ -59,6 +59,7 @@ def test_agent_session_constructs_with_all_tool_domains_registered(tmp_path):
         "get_bill_draft", "cancel_bill", "finalize_bill",
         "credit_customer", "settle_khata", "get_khata_balance", "list_customers",
         "set_preference", "get_preference",
+        "render_invoice_pdf", "get_daily_summary", "render_analysis_deck",
     }
     assert session._options.tools == ["Skill"]
     assert session._options.strict_mcp_config is True
@@ -86,7 +87,7 @@ def test_agent_session_constructs_with_all_tool_domains_registered(tmp_path):
     list_tools_result = asyncio.run(
         list_tools_handler(mcp_types.ListToolsRequest(method="tools/list"))
     )
-    assert len(list_tools_result.root.tools) == 18
+    assert len(list_tools_result.root.tools) == 21
 
     # Regression check for a real bug: start_bill/finalize_bill used the
     # simple-dict schema shorthand ({"payment_mode": str}), which the SDK's
@@ -97,6 +98,17 @@ def test_agent_session_constructs_with_all_tool_domains_registered(tmp_path):
     tools_by_name = {t.name: t for t in list_tools_result.root.tools}
     assert tools_by_name["start_bill"].inputSchema.get("required", []) == []
     assert tools_by_name["finalize_bill"].inputSchema.get("required", []) == []
+
+
+def test_agent_session_registers_invoicing_and_analytics_tools(tmp_path):
+    engine = make_engine(str(tmp_path / "session_artifacts.db"))
+    Base.metadata.create_all(engine)
+    session_factory = make_session_factory(engine)
+
+    session = AgentSession(chat_id="test-chat", session_factory=session_factory)
+
+    tool_names = {t.name for t in session._all_tools}
+    assert {"render_invoice_pdf", "get_daily_summary", "render_analysis_deck"} <= tool_names
 
 
 def test_agent_session_injects_existing_preferences_into_system_prompt(tmp_path):
@@ -122,7 +134,7 @@ def test_send_escapes_leading_slash_text_before_querying_client(tmp_path):
 
     result = asyncio.run(session.send("/context", update_id="u1"))
 
-    assert result == "ok"
+    assert result.text == "ok"
     fake_client.query.assert_awaited_once()
     (queried_text,), _ = fake_client.query.await_args
     assert queried_text != "/context"
@@ -137,7 +149,7 @@ def test_send_new_resets_connection_without_querying_client(tmp_path, command_te
 
     result = asyncio.run(session.send(command_text, update_id="u1"))
 
-    assert result == "Started a fresh conversation."
+    assert result.text == "Started a fresh conversation."
     fake_client.query.assert_not_awaited()
     fake_client.disconnect.assert_awaited_once()
     assert session._connected is False
@@ -152,3 +164,27 @@ def test_send_resets_connected_flag_on_failure(tmp_path):
         asyncio.run(session.send("hello", update_id="u1"))
 
     assert session._connected is False
+
+
+def test_send_returns_send_result_with_no_artifact_by_default(tmp_path):
+    session = _make_session(tmp_path)
+    _install_fake_client(session)
+
+    result = asyncio.run(session.send("how much sugar is left?", update_id="u1"))
+
+    assert isinstance(result, SendResult)
+    assert result.text == "ok"
+    assert result.artifact is None
+
+
+def test_send_returns_artifact_when_a_tool_populated_it(tmp_path):
+    session = _make_session(tmp_path)
+    _install_fake_client(session)
+    session._artifact_context.set(data=b"%PDF-fake", filename="invoice-1.pdf", mime_type="application/pdf")
+
+    result = asyncio.run(session.send("send me that as a pdf", update_id="u1"))
+
+    assert result.artifact is not None
+    assert result.artifact.filename == "invoice-1.pdf"
+    # Popped, not left behind for the next turn:
+    assert session._artifact_context.pop() is None

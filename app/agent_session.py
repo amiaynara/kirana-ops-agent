@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from claude_agent_sdk import (
@@ -9,11 +10,16 @@ from claude_agent_sdk import (
     create_sdk_mcp_server,
 )
 
+from app.services.analytics import AnalyticsService
 from app.services.billing import BillingService
+from app.services.invoice import InvoiceService
 from app.services.inventory import InventoryService
 from app.services.khata import KhataService
 from app.services.preferences import PreferencesService
+from app.tools.analytics_tools import build_analytics_tools
+from app.tools.artifact_context import ArtifactContext, ArtifactPayload
 from app.tools.billing_tools import UpdateContext, build_billing_tools
+from app.tools.invoicing_tools import build_invoicing_tools
 from app.tools.inventory_tools import build_inventory_tools
 from app.tools.khata_tools import build_khata_tools
 from app.tools.preferences_tools import build_preferences_tools
@@ -41,6 +47,12 @@ def _format_preferences(prefs: dict) -> str:
 DEFAULT_MODEL = "claude-sonnet-5"
 
 
+@dataclass(frozen=True)
+class SendResult:
+    text: str
+    artifact: ArtifactPayload | None = None
+
+
 class AgentSession:
     def __init__(
         self,
@@ -55,6 +67,9 @@ class AgentSession:
         billing = BillingService(session_factory)
         khata = KhataService(session_factory)
         preferences = PreferencesService(session_factory)
+        invoice_service = InvoiceService(session_factory, preferences)
+        analytics_service = AnalyticsService(session_factory)
+        self._artifact_context = ArtifactContext()
 
         self._update_context = UpdateContext()
         self._all_tools = (
@@ -62,6 +77,8 @@ class AgentSession:
             + build_billing_tools(billing, inventory, chat_id, self._update_context)
             + build_khata_tools(khata)
             + build_preferences_tools(preferences)
+            + build_invoicing_tools(invoice_service, self._artifact_context)
+            + build_analytics_tools(analytics_service, self._artifact_context)
         )
         server = create_sdk_mcp_server(name="kirana", version="1.0.0", tools=self._all_tools)
 
@@ -111,7 +128,7 @@ class AgentSession:
         self._connected = False
         self._lock = asyncio.Lock()
 
-    async def send(self, text: str, *, update_id: str) -> str:
+    async def send(self, text: str, *, update_id: str) -> SendResult:
         stripped = text.strip()
         if stripped.startswith("/"):
             if stripped.lower() == "/new":
@@ -137,7 +154,7 @@ class AgentSession:
                         pass
                     self._client = ClaudeSDKClient(options=self._options)
                     self._connected = False
-                return "Started a fresh conversation."
+                return SendResult(text="Started a fresh conversation.")
             # Any other leading-"/" text (an owner reflexively typing
             # "/help", a Telegram-style command, etc.) must NOT be passed to
             # `query()` as-is -- Claude Code's CLI-level slash-command parser
@@ -173,7 +190,8 @@ class AgentSession:
                                 )
                             else:
                                 result_text = message.result or ""
-                    return result_text
+                    artifact = self._artifact_context.pop()
+                    return SendResult(text=result_text, artifact=artifact)
                 except BaseException:
                     # Whatever failed -- connect(), query(), or
                     # receive_response() -- the client may now be in an
