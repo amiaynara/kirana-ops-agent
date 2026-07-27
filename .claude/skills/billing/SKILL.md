@@ -30,6 +30,10 @@ If the owner doesn't state a payment mode, check preferences for a default befor
 owners set "always assume UPI unless I say cash" as a standing preference. If there's genuinely no
 default and none was stated, ask before finalizing.
 
+A payment reference (UPI transaction ID, card auth code) is OPTIONAL — `finalize_bill` works fine
+without one. Don't ask for it or block finalizing on it; only record one if the owner volunteers
+it unprompted.
+
 ## Oversell guard
 
 Adding an item to the draft never checks stock — you can put "10 Maggi" on a bill even if only 6
