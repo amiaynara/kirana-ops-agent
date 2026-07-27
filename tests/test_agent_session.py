@@ -18,7 +18,7 @@ def test_agent_session_constructs_with_all_tool_domains_registered(tmp_path):
         "get_stock", "list_low_stock", "list_products", "receive_stock", "create_product",
         "start_bill", "add_bill_item", "update_bill_item", "drop_bill_item",
         "get_bill_draft", "cancel_bill", "finalize_bill",
-        "credit_customer", "settle_khata", "get_khata_balance",
+        "credit_customer", "settle_khata", "get_khata_balance", "list_customers",
         "set_preference", "get_preference",
     }
     assert session._options.tools == ["Skill"]
@@ -29,11 +29,15 @@ def test_agent_session_constructs_with_all_tool_domains_registered(tmp_path):
     # Options that make Skills actually discoverable/usable -- a regression
     # here fails open (skills silently become undiscoverable, no crash).
     assert session._options.setting_sources == ["project"]
-    assert session._options.skills == "all"
+    # Explicit allowlist, not "all" -- "all" leaks 12+ Claude Code CLI-bundled
+    # skills (dataviz, update-config, security-review, ...) into this bot.
+    assert session._options.skills == ["inventory", "billing", "khata", "preferences"]
     assert session._options.cwd == str(session._options.cwd)  # sanity: it's set to something
     assert session._options.max_turns == 20
+    # Model is pinned, not left to whatever the ambient `claude` CLI resolves to.
+    assert session._options.model == "claude-sonnet-5"
 
-    # Confirm all 17 tools actually made it into the MCP server config (not
+    # Confirm all 18 tools actually made it into the MCP server config (not
     # just into `_all_tools`). `McpSdkServerConfig["instance"]` is a private
     # mcp.server.lowlevel.server.Server; its registered list_tools handler is
     # the only way to introspect what Claude will actually see, so we invoke
@@ -43,7 +47,17 @@ def test_agent_session_constructs_with_all_tool_domains_registered(tmp_path):
     list_tools_result = asyncio.run(
         list_tools_handler(mcp_types.ListToolsRequest(method="tools/list"))
     )
-    assert len(list_tools_result.root.tools) == 17
+    assert len(list_tools_result.root.tools) == 18
+
+    # Regression check for a real bug: start_bill/finalize_bill used the
+    # simple-dict schema shorthand ({"payment_mode": str}), which the SDK's
+    # schema builder marks as ALL required -- even though both fields are
+    # meant to be optional (the handlers already do `args.get(...) or None`).
+    # A `.handler()`-direct test cannot catch this since it bypasses schema
+    # validation entirely -- this has to inspect the registered tool schema.
+    tools_by_name = {t.name: t for t in list_tools_result.root.tools}
+    assert tools_by_name["start_bill"].inputSchema.get("required", []) == []
+    assert tools_by_name["finalize_bill"].inputSchema.get("required", []) == []
 
 
 def test_agent_session_injects_existing_preferences_into_system_prompt(tmp_path):

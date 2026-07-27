@@ -5,8 +5,10 @@ from app.agent_session import AgentSession
 
 
 class CLIChannel:
-    def __init__(self, *, chat_id: str, session_factory):
-        self._session = AgentSession(chat_id=chat_id, session_factory=session_factory)
+    def __init__(self, *, chat_id: str, session_factory, anthropic_api_key: str | None = None):
+        self._session = AgentSession(
+            chat_id=chat_id, session_factory=session_factory, anthropic_api_key=anthropic_api_key,
+        )
 
     async def run(self):
         print("Kirana Ops Agent (CLI) -- type your message, or 'exit' to quit.")

@@ -10,3 +10,23 @@ def test_cli_channel_constructs_an_agent_session(tmp_path):
     channel = CLIChannel(chat_id="local", session_factory=session_factory)
 
     assert channel._session.chat_id == "local"
+
+
+def test_cli_channel_passes_anthropic_api_key_through_to_agent_session(tmp_path):
+    engine = make_engine(str(tmp_path / "cli_key.db"))
+    Base.metadata.create_all(engine)
+    session_factory = make_session_factory(engine)
+
+    channel = CLIChannel(chat_id="local", session_factory=session_factory, anthropic_api_key="sk-test-123")
+
+    assert channel._session._options.env == {"ANTHROPIC_API_KEY": "sk-test-123"}
+
+
+def test_cli_channel_leaves_env_empty_without_an_api_key(tmp_path):
+    engine = make_engine(str(tmp_path / "cli_no_key.db"))
+    Base.metadata.create_all(engine)
+    session_factory = make_session_factory(engine)
+
+    channel = CLIChannel(chat_id="local", session_factory=session_factory)
+
+    assert channel._session._options.env == {}

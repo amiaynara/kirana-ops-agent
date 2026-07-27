@@ -9,7 +9,10 @@ def main():
     settings = load_settings()
     engine = init_db(settings)
     session_factory = make_session_factory(engine)
-    channel = CLIChannel(chat_id="local", session_factory=session_factory)
+    channel = CLIChannel(
+        chat_id="local", session_factory=session_factory,
+        anthropic_api_key=settings.anthropic_api_key or None,
+    )
     asyncio.run(channel.run())
 
 
