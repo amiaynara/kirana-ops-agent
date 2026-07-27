@@ -1,9 +1,48 @@
 import asyncio
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+from claude_agent_sdk import ResultMessage
 from mcp import types as mcp_types
 
 from app.agent_session import AgentSession
 from app.db import Base, make_engine, make_session_factory
+
+
+def _make_session(tmp_path, name="session_send.db"):
+    engine = make_engine(str(tmp_path / name))
+    Base.metadata.create_all(engine)
+    session_factory = make_session_factory(engine)
+    return AgentSession(chat_id="test-chat", session_factory=session_factory)
+
+
+def _make_result_message(result="ok", is_error=False):
+    return ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=is_error,
+        num_turns=1,
+        session_id="fake-session",
+        result=result,
+    )
+
+
+def _install_fake_client(session, *, query_side_effect=None):
+    fake_client = MagicMock()
+    fake_client.connect = AsyncMock()
+    fake_client.disconnect = AsyncMock()
+    if query_side_effect is not None:
+        fake_client.query = AsyncMock(side_effect=query_side_effect)
+    else:
+        fake_client.query = AsyncMock()
+
+    async def _receive_response():
+        yield _make_result_message()
+
+    fake_client.receive_response = MagicMock(side_effect=lambda: _receive_response())
+    session._client = fake_client
+    return fake_client
 
 
 def test_agent_session_constructs_with_all_tool_domains_registered(tmp_path):
@@ -71,3 +110,45 @@ def test_agent_session_injects_existing_preferences_into_system_prompt(tmp_path)
     session = AgentSession(chat_id="test-chat", session_factory=session_factory)
 
     assert "default_payment_mode: upi" in session._options.system_prompt
+
+
+def test_send_escapes_leading_slash_text_before_querying_client(tmp_path):
+    # Regression test for the Critical slash-interception fix: Claude Code's
+    # CLI-level slash-command parser intercepts a literal "/context" before
+    # the model ever sees it (verified live). send() must never hand a
+    # leading-"/" owner message to query() unescaped.
+    session = _make_session(tmp_path)
+    fake_client = _install_fake_client(session)
+
+    result = asyncio.run(session.send("/context", update_id="u1"))
+
+    assert result == "ok"
+    fake_client.query.assert_awaited_once()
+    (queried_text,), _ = fake_client.query.await_args
+    assert queried_text != "/context"
+    assert "/context" in queried_text  # escaped as literal text, not dropped
+
+
+@pytest.mark.parametrize("command_text", ["/new", "  /NeW  "])
+def test_send_new_resets_connection_without_querying_client(tmp_path, command_text):
+    session = _make_session(tmp_path)
+    fake_client = _install_fake_client(session)
+    session._connected = True
+
+    result = asyncio.run(session.send(command_text, update_id="u1"))
+
+    assert result == "Started a fresh conversation."
+    fake_client.query.assert_not_awaited()
+    fake_client.disconnect.assert_awaited_once()
+    assert session._connected is False
+
+
+def test_send_resets_connected_flag_on_failure(tmp_path):
+    session = _make_session(tmp_path)
+    _install_fake_client(session, query_side_effect=RuntimeError("boom"))
+    session._connected = True
+
+    with pytest.raises(RuntimeError, match="boom"):
+        asyncio.run(session.send("hello", update_id="u1"))
+
+    assert session._connected is False

@@ -125,7 +125,16 @@ class AgentSession:
                 # would need a brand-new AgentSession, which is the channel
                 # layer's job, not this method's.
                 async with self._lock:
-                    await self.close()
+                    # Best-effort teardown before dropping the old client --
+                    # don't rely on close()'s `if self._connected` gate here:
+                    # if disconnect() itself were to raise, close() would
+                    # propagate that and leave the old (broken) client wired
+                    # up with `_connected` still True. Swallow and move on;
+                    # we're replacing the client either way.
+                    try:
+                        await self._client.disconnect()
+                    except Exception:
+                        pass
                     self._client = ClaudeSDKClient(options=self._options)
                     self._connected = False
                 return "Started a fresh conversation."
@@ -165,12 +174,31 @@ class AgentSession:
                             else:
                                 result_text = message.result or ""
                     return result_text
-                except Exception:
+                except BaseException:
                     # Whatever failed -- connect(), query(), or
                     # receive_response() -- the client may now be in an
                     # unusable state. Don't leave `_connected` stuck True:
                     # that would make every future send() assume the client
                     # still works and never retry connect().
+                    #
+                    # Widened to BaseException (not just Exception): a future
+                    # timeout-based fix for send() will abort a hung turn via
+                    # asyncio.CancelledError, which derives from
+                    # BaseException, not Exception. If we only caught
+                    # Exception here, a cancelled turn would silently leave
+                    # `_connected` True on a client whose stream was
+                    # abandoned mid-turn (verified live).
+                    #
+                    # Also tear down the old transport before dropping the
+                    # flag: ClaudeSDKClient.connect() always builds a brand
+                    # new subprocess rather than reusing/closing the old one,
+                    # so a bare `_connected = False` here orphans the old
+                    # `claude` CLI child process (verified live). Swallow
+                    # errors from disconnecting an already-broken client.
+                    try:
+                        await self._client.disconnect()
+                    except Exception:
+                        pass
                     self._connected = False
                     raise
             finally:
