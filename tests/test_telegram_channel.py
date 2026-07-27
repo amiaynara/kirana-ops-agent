@@ -296,3 +296,27 @@ def test_on_message_sends_artifact_as_telegram_document(tmp_path, monkeypatch):
     message.reply_document.assert_awaited_once()
     _, kwargs = message.reply_document.await_args
     assert kwargs["filename"] == "invoice-1.pdf"
+
+
+def test_on_message_swallows_reply_document_failure_and_notifies_owner(tmp_path, monkeypatch):
+    from app.tools.artifact_context import ArtifactPayload
+
+    registry = MagicMock()
+    session = MagicMock()
+    session.send = AsyncMock(return_value=SendResult(
+        text="Here's your invoice.",
+        artifact=ArtifactPayload(data=b"%PDF-fake", filename="invoice-1.pdf", mime_type="application/pdf"),
+    ))
+    registry.get_or_create.return_value = session
+
+    channel = _make_channel(registry)
+    update, message = _make_update(monkeypatch, update_id=12, text="send me the invoice")
+    monkeypatch.setattr(Message, "reply_document", AsyncMock(side_effect=RuntimeError("document too large")))
+
+    # Must not raise even though reply_document blows up.
+    asyncio.run(channel._on_message(update, MagicMock()))
+
+    assert message.reply_text.await_count == 2
+    first_call, second_call = message.reply_text.await_args_list
+    assert first_call.args[0] == "Here's your invoice."
+    assert "couldn't send it" in second_call.args[0]

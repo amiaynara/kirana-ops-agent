@@ -85,10 +85,16 @@ class TelegramChannel:
             return
         await self._send_reply(message, result.text or FALLBACK_REPLY)
         if result.artifact is not None:
-            await message.reply_document(
-                document=io.BytesIO(result.artifact.data),
-                filename=result.artifact.filename,
-            )
+            try:
+                await message.reply_document(
+                    document=io.BytesIO(result.artifact.data),
+                    filename=result.artifact.filename,
+                )
+            except Exception:
+                logger.exception("reply_document failed while sending artifact")
+                await self._send_reply(
+                    message, "I generated the file but couldn't send it -- try asking again."
+                )
 
     async def _send_reply(self, message, text: str) -> None:
         chunks = [text[i : i + MAX_REPLY_CHUNK] for i in range(0, len(text), MAX_REPLY_CHUNK)]

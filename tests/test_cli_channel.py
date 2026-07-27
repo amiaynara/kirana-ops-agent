@@ -61,3 +61,5 @@ def test_cli_channel_writes_artifact_to_disk_and_reports_path(tmp_path, monkeypa
     assert saved_path.read_bytes() == b"%PDF-fake"
     captured = capsys.readouterr()
     assert "invoice-1.pdf" in captured.out
+    assert "kirana> Here's your invoice." in captured.out
+    assert "SendResult(" not in captured.out
