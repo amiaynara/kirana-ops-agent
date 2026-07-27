@@ -68,3 +68,9 @@ class AmbiguousCustomerError(DomainError):
         super().__init__(
             f"Multiple customers match {name!r} (ids: {candidate_ids}) — be more specific"
         )
+
+
+class BillNotFoundError(DomainError):
+    def __init__(self, bill_id):
+        self.bill_id = bill_id
+        super().__init__(f"No bill found with id {bill_id}")
