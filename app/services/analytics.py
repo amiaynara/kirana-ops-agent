@@ -2,6 +2,7 @@ import io
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import matplotlib
 
@@ -11,6 +12,13 @@ from pptx import Presentation  # noqa: E402
 from pptx.util import Inches  # noqa: E402
 
 from app.models import Bill, BillItem, Product  # noqa: E402
+
+SHOP_TIMEZONE = ZoneInfo("Asia/Kolkata")
+
+
+def _to_shop_date(created_at_utc_naive: datetime) -> date:
+    """Convert a naive-but-UTC-valued timestamp (as stored on Bill.created_at) to the shop's local (IST) calendar date."""
+    return created_at_utc_naive.replace(tzinfo=timezone.utc).astimezone(SHOP_TIMEZONE).date()
 
 
 def _line_chart_png(x_labels: list[date], y_values: list[float], *, title: str, ylabel: str) -> io.BytesIO:
@@ -47,10 +55,10 @@ class AnalyticsService:
         self._session_factory = session_factory
 
     def get_daily_summary(self, *, target_date: date | None = None) -> dict:
-        target_date = target_date or datetime.now(timezone.utc).date()
+        target_date = target_date or datetime.now(SHOP_TIMEZONE).date()
         with self._session_factory() as session:
             bills = session.query(Bill).filter(Bill.status == "finalized").all()
-            day_bills = [b for b in bills if b.created_at.date() == target_date]
+            day_bills = [b for b in bills if _to_shop_date(b.created_at) == target_date]
 
             total_sales = sum((b.grand_total for b in day_bills), Decimal("0"))
             tax_collected = sum((b.cgst_total + b.sgst_total for b in day_bills), Decimal("0"))
@@ -82,14 +90,16 @@ class AnalyticsService:
             }
 
     def render_analysis_deck(self, *, start_date: date, end_date: date) -> bytes:
+        if start_date > end_date:
+            raise ValueError(f"start_date ({start_date}) must not be after end_date ({end_date})")
         with self._session_factory() as session:
             bills = session.query(Bill).filter(Bill.status == "finalized").all()
-            in_range = [b for b in bills if start_date <= b.created_at.date() <= end_date]
+            in_range = [b for b in bills if start_date <= _to_shop_date(b.created_at) <= end_date]
 
             daily_totals: dict[date, Decimal] = defaultdict(lambda: Decimal("0"))
             daily_gst: dict[date, Decimal] = defaultdict(lambda: Decimal("0"))
             for b in in_range:
-                d = b.created_at.date()
+                d = _to_shop_date(b.created_at)
                 daily_totals[d] += b.grand_total
                 daily_gst[d] += b.cgst_total + b.sgst_total
 

@@ -1,7 +1,10 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
+import pytest
+
 from app.db import Base, make_engine, make_session_factory
+from app.models import Bill
 from app.services.analytics import AnalyticsService
 from app.services.billing import BillingService
 from app.services.inventory import InventoryService
@@ -70,3 +73,37 @@ def test_render_analysis_deck_produces_a_valid_pptx(tmp_path):
 
     assert pptx_bytes[:2] == b"PK"  # pptx is a zip archive
     assert len(pptx_bytes) > 1000
+
+
+def test_get_daily_summary_uses_ist_day_boundary_not_utc(tmp_path):
+    inventory, billing, analytics = _make_services(tmp_path)
+    product_id = inventory.create_product(
+        name="Frooti 200ml", category="fmcg", unit="packet", is_loose=False,
+        hsn_code="22029090", gst_slab=12, cost_price=Decimal("10.00"),
+        sell_price=Decimal("15.00"), mrp=Decimal("15.00"), reorder_level=Decimal("20"),
+        initial_qty=Decimal("50"),
+    )
+    bill_id, _ = _finalize_a_bill(inventory, billing, product_id, Decimal("1"), "chat-1", "u-1")
+
+    engine = make_engine(str(tmp_path / "analytics.db"))
+    session_factory = make_session_factory(engine)
+    with session_factory() as session:
+        with session.begin():
+            bill = session.get(Bill, bill_id)
+            # Naive, UTC-valued timestamp: 2026-01-01 20:00 UTC == 2026-01-02 01:30 IST.
+            bill.created_at = datetime(2026, 1, 1, 20, 0, 0)
+
+    # Bucketed by the IST calendar date (2026-01-02), not the UTC one.
+    summary = analytics.get_daily_summary(target_date=date(2026, 1, 2))
+    assert summary["bill_count"] == 1
+
+    # The UTC calendar date must NOT pick up this bill.
+    summary_utc_date = analytics.get_daily_summary(target_date=date(2026, 1, 1))
+    assert summary_utc_date["bill_count"] == 0
+
+
+def test_render_analysis_deck_rejects_reversed_date_range(tmp_path):
+    _, _, analytics = _make_services(tmp_path)
+
+    with pytest.raises(ValueError):
+        analytics.render_analysis_deck(start_date=date(2026, 1, 10), end_date=date(2026, 1, 1))
