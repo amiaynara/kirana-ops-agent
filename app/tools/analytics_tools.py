@@ -6,8 +6,19 @@ from claude_agent_sdk import tool
 PPTX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
 
-def _parse_date(value: str):
-    return datetime.strptime(value, "%Y-%m-%d").date()
+def _parse_date(value: str, *, field_name):
+    """Parse a date string from tool args. Returns (date, None) on success,
+    or (None, error_result_dict) on failure — the caller returns error_result_dict
+    directly as the tool's result on failure."""
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None, {
+            "content": [{"type": "text",
+                         "text": f"{field_name!r} must be a date in YYYY-MM-DD format, got {value!r}."}],
+            "is_error": True,
+        }
+    return parsed, None
 
 
 def build_analytics_tools(analytics_service, artifact_context):
@@ -24,7 +35,11 @@ def build_analytics_tools(analytics_service, artifact_context):
         },
     )
     async def get_daily_summary(args):
-        target_date = _parse_date(args["target_date"]) if args.get("target_date") else None
+        target_date = None
+        if args.get("target_date"):
+            target_date, error = _parse_date(args["target_date"], field_name="target_date")
+            if error is not None:
+                return error
         summary = await asyncio.to_thread(analytics_service.get_daily_summary, target_date=target_date)
         lines = [
             f"Date: {summary['date']}",
@@ -56,11 +71,21 @@ def build_analytics_tools(analytics_service, artifact_context):
         },
     )
     async def render_analysis_deck(args):
-        start = _parse_date(args["start_date"])
-        end = _parse_date(args["end_date"])
-        pptx_bytes = await asyncio.to_thread(
-            analytics_service.render_analysis_deck, start_date=start, end_date=end,
-        )
+        start, error = _parse_date(args["start_date"], field_name="start_date")
+        if error is not None:
+            return error
+        end, error = _parse_date(args["end_date"], field_name="end_date")
+        if error is not None:
+            return error
+        try:
+            pptx_bytes = await asyncio.to_thread(
+                analytics_service.render_analysis_deck, start_date=start, end_date=end,
+            )
+        except ValueError as exc:
+            return {
+                "content": [{"type": "text", "text": f"Refused: {exc}"}],
+                "is_error": True,
+            }
         artifact_context.set(
             data=pptx_bytes, filename=f"analysis-{start}-to-{end}.pptx", mime_type=PPTX_MIME_TYPE,
         )

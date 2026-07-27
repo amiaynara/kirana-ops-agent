@@ -68,3 +68,55 @@ def test_render_analysis_deck_sets_artifact(tmp_path):
     assert payload.mime_type == (
         "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     )
+
+
+def test_get_daily_summary_rejects_malformed_date(tmp_path):
+    inventory, billing, analytics = _make_services(tmp_path)
+    ctx = ArtifactContext()
+    tools = {t.name: t for t in build_analytics_tools(analytics, ctx)}
+    result = asyncio.run(tools["get_daily_summary"].handler(
+        {"target_date": "not-a-date"}
+    ))
+
+    assert result.get("is_error") is True
+    assert "must be a date in YYYY-MM-DD format" in result["content"][0]["text"]
+    assert ctx.pop() is None
+
+
+def test_render_analysis_deck_rejects_malformed_start_date(tmp_path):
+    inventory, billing, analytics = _make_services(tmp_path)
+    ctx = ArtifactContext()
+    tools = {t.name: t for t in build_analytics_tools(analytics, ctx)}
+    result = asyncio.run(tools["render_analysis_deck"].handler(
+        {"start_date": "not-a-date", "end_date": "2024-01-01"}
+    ))
+
+    assert result.get("is_error") is True
+    assert "must be a date in YYYY-MM-DD format" in result["content"][0]["text"]
+    assert ctx.pop() is None
+
+
+def test_render_analysis_deck_rejects_malformed_end_date(tmp_path):
+    inventory, billing, analytics = _make_services(tmp_path)
+    ctx = ArtifactContext()
+    tools = {t.name: t for t in build_analytics_tools(analytics, ctx)}
+    result = asyncio.run(tools["render_analysis_deck"].handler(
+        {"start_date": "2024-01-01", "end_date": "invalid"}
+    ))
+
+    assert result.get("is_error") is True
+    assert "must be a date in YYYY-MM-DD format" in result["content"][0]["text"]
+    assert ctx.pop() is None
+
+
+def test_render_analysis_deck_rejects_reversed_date_range(tmp_path):
+    inventory, billing, analytics = _make_services(tmp_path)
+    ctx = ArtifactContext()
+    tools = {t.name: t for t in build_analytics_tools(analytics, ctx)}
+    result = asyncio.run(tools["render_analysis_deck"].handler(
+        {"start_date": "2024-01-31", "end_date": "2024-01-01"}
+    ))
+
+    assert result.get("is_error") is True
+    assert "Refused:" in result["content"][0]["text"]
+    assert ctx.pop() is None
