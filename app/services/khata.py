@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from sqlalchemy import func
 
-from app.errors import CustomerNotFoundError, ValidationError
+from app.errors import AmbiguousCustomerError, CustomerNotFoundError, ValidationError
 from app.models import Customer, KhataLedger
 
 
@@ -15,9 +15,14 @@ class KhataService:
 
         Treats % and _ as literal characters, not SQL wildcards.
         """
-        return session.query(Customer).filter(
+        matches = session.query(Customer).filter(
             func.lower(Customer.name) == customer_name.lower()
-        ).one_or_none()
+        ).all()
+        if not matches:
+            return None
+        if len(matches) == 1:
+            return matches[0]
+        raise AmbiguousCustomerError(customer_name, [c.id for c in matches])
 
     def credit_customer(self, *, customer_name, amount, note=None):
         if amount <= 0:
@@ -60,3 +65,8 @@ class KhataService:
                 else:
                     balance -= entry.amount
             return balance
+
+    def list_customers(self):
+        with self._session_factory() as session:
+            customers = session.query(Customer).order_by(Customer.name).all()
+            return [(c.id, c.name) for c in customers]

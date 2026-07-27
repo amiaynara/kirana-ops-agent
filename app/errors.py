@@ -59,3 +59,12 @@ class AmbiguousProductError(DomainError):
         super().__init__(
             f"Multiple products match {name!r} (ids: {candidate_ids}) — be more specific"
         )
+
+
+class AmbiguousCustomerError(DomainError):
+    def __init__(self, name, candidate_ids):
+        self.name = name
+        self.candidate_ids = candidate_ids
+        super().__init__(
+            f"Multiple customers match {name!r} (ids: {candidate_ids}) — be more specific"
+        )

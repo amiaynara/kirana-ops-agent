@@ -31,8 +31,15 @@ def build_billing_tools(billing, inventory, chat_id: str, update_context: Update
     async def _resolve_product(name):
         return await asyncio.to_thread(inventory.find_product_by_name, name=name)
 
-    @tool("start_bill", "Start a new bill, clearing any prior unfinished draft for this chat.",
-          {"payment_mode": str})
+    @tool(
+        "start_bill",
+        "Start a new bill, clearing any prior unfinished draft for this chat.",
+        {
+            "type": "object",
+            "properties": {"payment_mode": {"type": "string"}},
+            "required": [],
+        },
+    )
     async def start_bill(args):
         try:
             await asyncio.to_thread(
@@ -119,7 +126,14 @@ def build_billing_tools(billing, inventory, chat_id: str, update_context: Update
         "finalize_bill",
         "Finalize the current bill: decrements stock and produces the final GST-inclusive total. "
         "Only call this when the owner has explicitly confirmed they want to complete the sale.",
-        {"payment_mode": str, "payment_ref": str},
+        {
+            "type": "object",
+            "properties": {
+                "payment_mode": {"type": "string"},
+                "payment_ref": {"type": "string"},
+            },
+            "required": [],
+        },
     )
     async def finalize_bill(args):
         update_id = update_context.current_update_id

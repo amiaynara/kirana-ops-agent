@@ -3,7 +3,8 @@ from decimal import Decimal
 import pytest
 
 from app.db import Base, make_engine, make_session_factory
-from app.errors import CustomerNotFoundError, ValidationError
+from app.errors import AmbiguousCustomerError, CustomerNotFoundError, ValidationError
+from app.models import Customer, KhataLedger
 from app.services.khata import KhataService
 
 
@@ -74,3 +75,35 @@ def test_credit_customer_treats_underscore_and_percent_as_literal_characters(kha
     # Verify percent name returns correct balance, not both
     assert khata.get_balance(customer_name="100%Store") == Decimal("333")
     assert khata.get_balance(customer_name="100XStore") == Decimal("444")
+
+
+def test_credit_customer_note_is_recorded(khata):
+    khata.credit_customer(customer_name="Ramesh", amount=Decimal("500"), note="opening balance")
+    session = khata._session_factory()
+    entry = session.query(KhataLedger).one()
+    assert entry.note == "opening balance"
+    session.close()
+
+
+def test_find_customer_raises_when_multiple_customers_share_a_name_case_insensitively(khata):
+    # credit_customer auto-creates on first entry -- case-variant names collide
+    # on the case-insensitive lookup but are still two distinct rows.
+    khata.credit_customer(customer_name="Ramesh", amount=Decimal("1"))
+    session = khata._session_factory()
+    with session.begin():
+        session.add(Customer(name="ramesh"))
+    session.close()
+
+    with pytest.raises(AmbiguousCustomerError):
+        khata.get_balance(customer_name="RAMESH")
+
+
+def test_list_customers_returns_names(khata):
+    khata.credit_customer(customer_name="Ramesh", amount=Decimal("1"))
+    khata.credit_customer(customer_name="Suresh", amount=Decimal("1"))
+    names = {name for _, name in khata.list_customers()}
+    assert names == {"Ramesh", "Suresh"}
+
+
+def test_list_customers_empty(khata):
+    assert khata.list_customers() == []
