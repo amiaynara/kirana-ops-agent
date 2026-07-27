@@ -41,13 +41,8 @@ class InvoiceService:
             )
 
             buffer = io.BytesIO()
-            # pageCompression=0: keep content streams uncompressed. Nothing in
-            # this module reads the PDF back in, but callers (and these
-            # tests) grep the raw bytes for text like the shop name, which
-            # only works if the stream isn't Flate-compressed.
             doc = SimpleDocTemplate(
                 buffer, pagesize=A4, topMargin=18 * mm, bottomMargin=18 * mm,
-                pageCompression=0,
             )
             styles = getSampleStyleSheet()
             elements = []

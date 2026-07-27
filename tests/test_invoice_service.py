@@ -1,6 +1,8 @@
+import io
 from decimal import Decimal
 
 import pytest
+from pypdf import PdfReader
 
 from app.db import Base, make_engine, make_session_factory
 from app.errors import BillNotFoundError
@@ -51,7 +53,9 @@ def test_render_invoice_pdf_includes_shop_preferences(tmp_path):
 
     pdf_bytes = invoice.render_invoice_pdf(bill_id=bill_id)
 
-    assert b"Sharma Kirana Store" in pdf_bytes
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    extracted_text = "\n".join(page.extract_text() for page in reader.pages)
+    assert "Sharma Kirana Store" in extracted_text
 
 
 def test_render_invoice_pdf_raises_for_unknown_bill(tmp_path):
