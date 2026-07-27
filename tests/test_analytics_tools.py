@@ -39,7 +39,7 @@ def test_get_daily_summary_reports_totals(tmp_path):
 
     assert not result.get("is_error")
     assert "Maggi" in result["content"][0]["text"]
-    assert ctx.pop() is None  # get_daily_summary never produces a file artifact
+    assert ctx.pop_all() == []  # get_daily_summary never produces a file artifact
 
 
 def test_render_analysis_deck_sets_artifact(tmp_path):
@@ -62,8 +62,9 @@ def test_render_analysis_deck_sets_artifact(tmp_path):
     ))
 
     assert not result.get("is_error")
-    payload = ctx.pop()
-    assert payload is not None
+    payloads = ctx.pop_all()
+    assert len(payloads) == 1
+    payload = payloads[0]
     assert payload.data[:2] == b"PK"
     assert payload.mime_type == (
         "application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -80,7 +81,7 @@ def test_get_daily_summary_rejects_malformed_date(tmp_path):
 
     assert result.get("is_error") is True
     assert "must be a date in YYYY-MM-DD format" in result["content"][0]["text"]
-    assert ctx.pop() is None
+    assert ctx.pop_all() == []
 
 
 def test_render_analysis_deck_rejects_malformed_start_date(tmp_path):
@@ -93,7 +94,7 @@ def test_render_analysis_deck_rejects_malformed_start_date(tmp_path):
 
     assert result.get("is_error") is True
     assert "must be a date in YYYY-MM-DD format" in result["content"][0]["text"]
-    assert ctx.pop() is None
+    assert ctx.pop_all() == []
 
 
 def test_render_analysis_deck_rejects_malformed_end_date(tmp_path):
@@ -106,7 +107,7 @@ def test_render_analysis_deck_rejects_malformed_end_date(tmp_path):
 
     assert result.get("is_error") is True
     assert "must be a date in YYYY-MM-DD format" in result["content"][0]["text"]
-    assert ctx.pop() is None
+    assert ctx.pop_all() == []
 
 
 def test_render_analysis_deck_rejects_reversed_date_range(tmp_path):
@@ -119,4 +120,4 @@ def test_render_analysis_deck_rejects_reversed_date_range(tmp_path):
 
     assert result.get("is_error") is True
     assert "Refused:" in result["content"][0]["text"]
-    assert ctx.pop() is None
+    assert ctx.pop_all() == []

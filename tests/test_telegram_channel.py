@@ -283,7 +283,7 @@ def test_on_message_sends_artifact_as_telegram_document(tmp_path, monkeypatch):
     session = MagicMock()
     session.send = AsyncMock(return_value=SendResult(
         text="Here's your invoice.",
-        artifact=ArtifactPayload(data=b"%PDF-fake", filename="invoice-1.pdf", mime_type="application/pdf"),
+        artifacts=[ArtifactPayload(data=b"%PDF-fake", filename="invoice-1.pdf", mime_type="application/pdf")],
     ))
     registry.get_or_create.return_value = session
 
@@ -305,7 +305,7 @@ def test_on_message_swallows_reply_document_failure_and_notifies_owner(tmp_path,
     session = MagicMock()
     session.send = AsyncMock(return_value=SendResult(
         text="Here's your invoice.",
-        artifact=ArtifactPayload(data=b"%PDF-fake", filename="invoice-1.pdf", mime_type="application/pdf"),
+        artifacts=[ArtifactPayload(data=b"%PDF-fake", filename="invoice-1.pdf", mime_type="application/pdf")],
     ))
     registry.get_or_create.return_value = session
 

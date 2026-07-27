@@ -47,7 +47,7 @@ def test_cli_channel_writes_artifact_to_disk_and_reports_path(tmp_path, monkeypa
     channel = CLIChannel(chat_id="local", session_factory=session_factory)
     channel._session.send = AsyncMock(return_value=SendResult(
         text="Here's your invoice.",
-        artifact=ArtifactPayload(data=b"%PDF-fake", filename="invoice-1.pdf", mime_type="application/pdf"),
+        artifacts=[ArtifactPayload(data=b"%PDF-fake", filename="invoice-1.pdf", mime_type="application/pdf")],
     ))
     channel._session.close = AsyncMock()
 

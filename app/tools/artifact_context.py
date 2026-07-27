@@ -10,12 +10,12 @@ class ArtifactPayload:
 
 class ArtifactContext:
     def __init__(self):
-        self._pending: ArtifactPayload | None = None
+        self._pending: list[ArtifactPayload] = []
 
     def set(self, *, data: bytes, filename: str, mime_type: str) -> None:
-        self._pending = ArtifactPayload(data=data, filename=filename, mime_type=mime_type)
+        self._pending.append(ArtifactPayload(data=data, filename=filename, mime_type=mime_type))
 
-    def pop(self) -> ArtifactPayload | None:
-        payload = self._pending
-        self._pending = None
-        return payload
+    def pop_all(self) -> list[ArtifactPayload]:
+        payloads = self._pending
+        self._pending = []
+        return payloads

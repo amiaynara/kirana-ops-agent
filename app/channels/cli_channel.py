@@ -26,10 +26,10 @@ class CLIChannel:
                 update_id = str(uuid.uuid4())
                 result = await self._session.send(text, update_id=update_id)
                 print(f"kirana> {result.text}")
-                if result.artifact is not None:
+                for artifact in result.artifacts:
                     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-                    saved_path = ARTIFACTS_DIR / result.artifact.filename
-                    saved_path.write_bytes(result.artifact.data)
+                    saved_path = ARTIFACTS_DIR / artifact.filename
+                    saved_path.write_bytes(artifact.data)
                     print(f"kirana> (saved to {saved_path})")
         finally:
             await self._session.close()

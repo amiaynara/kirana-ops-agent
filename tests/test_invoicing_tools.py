@@ -38,8 +38,9 @@ def test_render_invoice_pdf_sets_artifact_and_confirms(tmp_path):
     result = asyncio.run(tools["render_invoice_pdf"].handler({"bill_id": bill_id}))
 
     assert not result.get("is_error")
-    payload = ctx.pop()
-    assert payload is not None
+    payloads = ctx.pop_all()
+    assert len(payloads) == 1
+    payload = payloads[0]
     assert payload.data[:4] == b"%PDF"
     assert payload.filename == f"invoice-{bill_id}.pdf"
     assert payload.mime_type == "application/pdf"
@@ -53,4 +54,4 @@ def test_render_invoice_pdf_is_error_for_unknown_bill(tmp_path):
     result = asyncio.run(tools["render_invoice_pdf"].handler({"bill_id": 99999}))
 
     assert result.get("is_error") is True
-    assert ctx.pop() is None
+    assert ctx.pop_all() == []

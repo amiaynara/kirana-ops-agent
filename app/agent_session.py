@@ -1,6 +1,6 @@
 import asyncio
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from claude_agent_sdk import (
@@ -50,7 +50,7 @@ DEFAULT_MODEL = "claude-sonnet-5"
 @dataclass(frozen=True)
 class SendResult:
     text: str
-    artifact: ArtifactPayload | None = None
+    artifacts: list[ArtifactPayload] = field(default_factory=list)
 
 
 class AgentSession:
@@ -172,9 +172,11 @@ class AgentSession:
                         self._connected = True
                     await self._client.query(text)
                     result_text = ""
+                    turn_errored = False
                     async for message in self._client.receive_response():
                         if isinstance(message, ResultMessage):
                             if message.is_error:
+                                turn_errored = True
                                 print(
                                     f"[agent_session] chat_id={self.chat_id} "
                                     f"update_id={update_id} dead turn "
@@ -190,8 +192,15 @@ class AgentSession:
                                 )
                             else:
                                 result_text = message.result or ""
-                    artifact = self._artifact_context.pop()
-                    return SendResult(text=result_text, artifact=artifact)
+                    if turn_errored:
+                        # A dead turn must never deliver a file alongside its
+                        # own "something went wrong" message -- that's
+                        # self-contradictory (verified live). Discard
+                        # whatever a tool set mid-turn instead of attaching it.
+                        self._artifact_context.pop_all()
+                        return SendResult(text=result_text, artifacts=[])
+                    artifacts = self._artifact_context.pop_all()
+                    return SendResult(text=result_text, artifacts=artifacts)
                 except BaseException:
                     # Whatever failed -- connect(), query(), or
                     # receive_response() -- the client may now be in an
@@ -231,7 +240,7 @@ class AgentSession:
                 # sit in `_artifact_context` and leak into the next
                 # successful turn on this session (verified live) -- discard
                 # it here instead of deferring it forward.
-                self._artifact_context.pop()
+                self._artifact_context.pop_all()
 
     async def close(self):
         if self._connected:

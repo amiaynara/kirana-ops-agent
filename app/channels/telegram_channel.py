@@ -84,11 +84,11 @@ class TelegramChannel:
             await self._send_reply(message, "Something went wrong on my end -- please try again in a moment.")
             return
         await self._send_reply(message, result.text or FALLBACK_REPLY)
-        if result.artifact is not None:
+        for artifact in result.artifacts:
             try:
                 await message.reply_document(
-                    document=io.BytesIO(result.artifact.data),
-                    filename=result.artifact.filename,
+                    document=io.BytesIO(artifact.data),
+                    filename=artifact.filename,
                 )
             except Exception:
                 logger.exception("reply_document failed while sending artifact")

@@ -176,7 +176,7 @@ def test_send_returns_send_result_with_no_artifact_by_default(tmp_path):
 
     assert isinstance(result, SendResult)
     assert result.text == "ok"
-    assert result.artifact is None
+    assert result.artifacts == []
 
 
 def test_send_returns_artifact_when_a_tool_populated_it(tmp_path):
@@ -186,10 +186,10 @@ def test_send_returns_artifact_when_a_tool_populated_it(tmp_path):
 
     result = asyncio.run(session.send("send me that as a pdf", update_id="u1"))
 
-    assert result.artifact is not None
-    assert result.artifact.filename == "invoice-1.pdf"
+    assert len(result.artifacts) == 1
+    assert result.artifacts[0].filename == "invoice-1.pdf"
     # Popped, not left behind for the next turn:
-    assert session._artifact_context.pop() is None
+    assert session._artifact_context.pop_all() == []
 
 
 def test_send_discards_stale_artifact_after_a_failed_turn(tmp_path):
@@ -211,7 +211,29 @@ def test_send_discards_stale_artifact_after_a_failed_turn(tmp_path):
 
     result = asyncio.run(session.send("how much sugar is left?", update_id="u2"))
 
-    assert result.artifact is None
+    assert result.artifacts == []
+
+
+def test_send_discards_pending_artifact_on_is_error_result_message(tmp_path):
+    # Regression test (Finding 4): a ResultMessage with is_error=True (e.g.
+    # hitting max_turns) is a "dead" turn -- its own text says "something
+    # went wrong". It must never also deliver a file that a tool set mid-turn,
+    # since that contradicts the error message (verified live before this fix).
+    session = _make_session(tmp_path)
+    fake_client = _install_fake_client(session)
+
+    async def _receive_error_response():
+        yield _make_result_message(result=None, is_error=True)
+
+    fake_client.receive_response = MagicMock(side_effect=lambda: _receive_error_response())
+    session._artifact_context.set(data=b"%PDF-fake", filename="stale.pdf", mime_type="application/pdf")
+
+    result = asyncio.run(session.send("send me the deck", update_id="u1"))
+
+    assert result.artifacts == []
+    assert "went wrong" in result.text.lower()
+    # Drained, not left behind for the next turn either:
+    assert session._artifact_context.pop_all() == []
 
 
 def test_agent_session_skills_allowlist_includes_invoicing_and_analytics(tmp_path):
