@@ -1,7 +1,10 @@
 import asyncio
 import uuid
+from pathlib import Path
 
 from app.agent_session import AgentSession
+
+ARTIFACTS_DIR = Path("data/artifacts")
 
 
 class CLIChannel:
@@ -21,7 +24,12 @@ class CLIChannel:
                 if not text.strip():
                     continue
                 update_id = str(uuid.uuid4())
-                reply = await self._session.send(text, update_id=update_id)
-                print(f"kirana> {reply}")
+                result = await self._session.send(text, update_id=update_id)
+                print(f"kirana> {result.text}")
+                if result.artifact is not None:
+                    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+                    saved_path = ARTIFACTS_DIR / result.artifact.filename
+                    saved_path.write_bytes(result.artifact.data)
+                    print(f"kirana> (saved to {saved_path})")
         finally:
             await self._session.close()

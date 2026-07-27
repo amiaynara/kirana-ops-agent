@@ -1,3 +1,4 @@
+import io
 import logging
 
 from telegram import Update
@@ -75,13 +76,19 @@ class TelegramChannel:
 
         session = self._registry.get_or_create(chat_id)
         try:
-            reply = await session.send(text, update_id=str(update.update_id))
+            result = await session.send(text, update_id=str(update.update_id))
         except Exception:
             logger.exception(
                 "AgentSession.send failed for chat_id=%s update_id=%s", chat_id, update.update_id,
             )
-            reply = "Something went wrong on my end -- please try again in a moment."
-        await self._send_reply(message, reply or FALLBACK_REPLY)
+            await self._send_reply(message, "Something went wrong on my end -- please try again in a moment.")
+            return
+        await self._send_reply(message, result.text or FALLBACK_REPLY)
+        if result.artifact is not None:
+            await message.reply_document(
+                document=io.BytesIO(result.artifact.data),
+                filename=result.artifact.filename,
+            )
 
     async def _send_reply(self, message, text: str) -> None:
         chunks = [text[i : i + MAX_REPLY_CHUNK] for i in range(0, len(text), MAX_REPLY_CHUNK)]

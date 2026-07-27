@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from telegram import Chat, Message, Update
 from telegram.ext import filters
 
+from app.agent_session import SendResult
 from app.channels.telegram_channel import FALLBACK_REPLY, MAX_REPLY_CHUNK, TelegramChannel
 
 
@@ -13,10 +14,12 @@ def _make_update(monkeypatch, update_id, text, chat_id=123):
     message = Message(message_id=update_id, date=datetime.now(timezone.utc), chat=chat, text=text)
     message.set_bot(MagicMock())  # allow message.reply_text(...) to be called without a live bot
     # Message is a frozen, __slots__-based TelegramObject (PTB 22.x): there is no
-    # instance slot for reply_text and instances are frozen, so instance-level
-    # stubbing (message.reply_text = ...) is impossible. Patch the class method
-    # instead; monkeypatch restores the original automatically on teardown.
+    # instance slot for reply_text/reply_document and instances are frozen, so
+    # instance-level stubbing (message.reply_text = ...) is impossible. Patch
+    # the class methods instead; monkeypatch restores the originals
+    # automatically on teardown.
     monkeypatch.setattr(Message, "reply_text", AsyncMock())
+    monkeypatch.setattr(Message, "reply_document", AsyncMock())
     return Update(update_id=update_id, message=message), message
 
 
@@ -39,7 +42,7 @@ def _make_channel(registry, allowed_chat_ids=None):
 def test_on_message_replies_with_session_result(tmp_path, monkeypatch):
     registry = MagicMock()
     session = MagicMock()
-    session.send = AsyncMock(return_value="You've got 40 packets of Tata Salt in stock.")
+    session.send = AsyncMock(return_value=SendResult(text="You've got 40 packets of Tata Salt in stock."))
     registry.get_or_create.return_value = session
 
     channel = _make_channel(registry)
@@ -55,7 +58,7 @@ def test_on_message_replies_with_session_result(tmp_path, monkeypatch):
 def test_on_message_falls_back_on_empty_reply(tmp_path, monkeypatch):
     registry = MagicMock()
     session = MagicMock()
-    session.send = AsyncMock(return_value="")
+    session.send = AsyncMock(return_value=SendResult(text=""))
     registry.get_or_create.return_value = session
 
     channel = _make_channel(registry)
@@ -90,7 +93,7 @@ def test_on_message_passes_non_new_slash_text_through_unchanged(tmp_path, monkey
     registry = MagicMock()
     registry.reset.return_value = None
     session = MagicMock()
-    session.send = AsyncMock(return_value="Some internal diagnostics dump.")
+    session.send = AsyncMock(return_value=SendResult(text="Some internal diagnostics dump."))
     registry.get_or_create.return_value = session
 
     channel = _make_channel(registry)
@@ -122,7 +125,7 @@ def test_text_and_update_type_message_filter_rejects_edited_message(monkeypatch)
 def test_on_message_processes_message_from_allowed_chat_id(tmp_path, monkeypatch):
     registry = MagicMock()
     session = MagicMock()
-    session.send = AsyncMock(return_value="40 packets of Tata Salt in stock.")
+    session.send = AsyncMock(return_value=SendResult(text="40 packets of Tata Salt in stock."))
     registry.get_or_create.return_value = session
 
     channel = _make_channel(registry, allowed_chat_ids={"123"})
@@ -137,7 +140,7 @@ def test_on_message_processes_message_from_allowed_chat_id(tmp_path, monkeypatch
 def test_on_message_silently_drops_message_from_disallowed_chat_id(tmp_path, monkeypatch):
     registry = MagicMock()
     session = MagicMock()
-    session.send = AsyncMock(return_value="should not be reached")
+    session.send = AsyncMock(return_value=SendResult(text="should not be reached"))
     registry.get_or_create.return_value = session
 
     channel = _make_channel(registry, allowed_chat_ids={"999"})
@@ -154,7 +157,7 @@ def test_on_message_with_no_allowlist_processes_any_chat_id(tmp_path, monkeypatc
     # behavior for local dev where this isn't configured.
     registry = MagicMock()
     session = MagicMock()
-    session.send = AsyncMock(return_value="ok")
+    session.send = AsyncMock(return_value=SendResult(text="ok"))
     registry.get_or_create.return_value = session
 
     channel = _make_channel(registry, allowed_chat_ids=None)
@@ -173,7 +176,7 @@ def test_on_message_chunks_long_reply_into_multiple_reply_text_calls(tmp_path, m
     registry = MagicMock()
     session = MagicMock()
     long_reply = "x" * (MAX_REPLY_CHUNK * 2 + 500)
-    session.send = AsyncMock(return_value=long_reply)
+    session.send = AsyncMock(return_value=SendResult(text=long_reply))
     registry.get_or_create.return_value = session
 
     channel = _make_channel(registry)
@@ -190,7 +193,7 @@ def test_on_message_chunks_long_reply_into_multiple_reply_text_calls(tmp_path, m
 def test_on_message_swallows_reply_text_failure_without_raising(tmp_path, monkeypatch):
     registry = MagicMock()
     session = MagicMock()
-    session.send = AsyncMock(return_value="a normal reply")
+    session.send = AsyncMock(return_value=SendResult(text="a normal reply"))
     registry.get_or_create.return_value = session
 
     channel = _make_channel(registry)
@@ -268,3 +271,28 @@ def test_new_causes_subsequent_get_or_create_to_see_freshly_read_preferences(tmp
     second_session = registry.get_or_create("chat-1")
     assert second_session is not first_session
     assert "default_payment_mode: upi" in second_session._options.system_prompt
+
+
+# --- Task 5: artifact delivery over Telegram -----------------------------
+
+
+def test_on_message_sends_artifact_as_telegram_document(tmp_path, monkeypatch):
+    from app.tools.artifact_context import ArtifactPayload
+
+    registry = MagicMock()
+    session = MagicMock()
+    session.send = AsyncMock(return_value=SendResult(
+        text="Here's your invoice.",
+        artifact=ArtifactPayload(data=b"%PDF-fake", filename="invoice-1.pdf", mime_type="application/pdf"),
+    ))
+    registry.get_or_create.return_value = session
+
+    channel = _make_channel(registry)
+    update, message = _make_update(monkeypatch, update_id=5, text="send me the invoice")
+
+    asyncio.run(channel._on_message(update, MagicMock()))
+
+    message.reply_text.assert_awaited_once_with("Here's your invoice.")
+    message.reply_document.assert_awaited_once()
+    _, kwargs = message.reply_document.await_args
+    assert kwargs["filename"] == "invoice-1.pdf"
