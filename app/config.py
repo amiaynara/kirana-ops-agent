@@ -11,6 +11,12 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     db_path: str = "./data/local.db"
     log_level: str = "INFO"
+    # Comma-separated allowlist of Telegram chat IDs (env vars are strings,
+    # so this stays a str here and gets parsed/split by the caller). Empty
+    # string means "no restriction configured" -- fine for local/dev, but a
+    # real deployment must set this or any stranger who finds the bot's
+    # username gets full read/write access to the shop's data.
+    allowed_telegram_chat_ids: str = ""
 
     model_config = SettingsConfigDict(
         env_file_encoding="utf-8",

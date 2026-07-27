@@ -16,7 +16,16 @@ def build_channel(settings: Settings) -> TelegramChannel:
         session_factory=session_factory,
         anthropic_api_key=settings.anthropic_api_key or None,
     )
-    return TelegramChannel(bot_token=settings.telegram_bot_token, registry=registry)
+    allowed_chat_ids = {
+        chat_id.strip()
+        for chat_id in settings.allowed_telegram_chat_ids.split(",")
+        if chat_id.strip()
+    }
+    return TelegramChannel(
+        bot_token=settings.telegram_bot_token,
+        registry=registry,
+        allowed_chat_ids=allowed_chat_ids or None,
+    )
 
 
 def main():

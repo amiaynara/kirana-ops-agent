@@ -21,6 +21,15 @@ class SessionRegistry:
             self._sessions[chat_id] = session
         return session
 
+    def reset(self, chat_id: str) -> AgentSession | None:
+        """Drop the cached session for chat_id, if any, and return it.
+
+        Synchronous by design (matches get_or_create) -- does NOT call
+        .close() on the popped session, since that requires an `await`.
+        Closing the popped session, if needed, is the caller's job.
+        """
+        return self._sessions.pop(chat_id, None)
+
     async def close_all(self):
         for session in self._sessions.values():
             await session.close()
