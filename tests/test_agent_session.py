@@ -246,3 +246,35 @@ def test_agent_session_skills_allowlist_includes_invoicing_and_analytics(tmp_pat
     assert set(session._options.skills) == {
         "inventory", "billing", "khata", "preferences", "invoicing", "analytics",
     }
+
+
+def test_no_tool_can_delete_stock_history_or_khata_entries(tmp_path):
+    # Guardrail from the design spec: deletion of stock or khata history must
+    # be structurally impossible, not just discouraged by the prompt. Dropping
+    # a line from an in-progress DRAFT (drop_bill_item) or discarding the
+    # whole draft (cancel_bill) is fine -- those only ever touch draft_bills,
+    # never the append-only stock_movements/khata_ledger/products tables.
+    session = _make_session(tmp_path, name="no_delete.db")
+
+    tool_names = {t.name for t in session._all_tools}
+    dangerous_words = ("delete", "remove", "purge", "destroy", "erase")
+    draft_only_exceptions = {"drop_bill_item", "cancel_bill"}
+
+    offenders = {
+        name for name in tool_names
+        if any(word in name for word in dangerous_words) and name not in draft_only_exceptions
+    }
+    assert offenders == set(), f"found a tool that could delete history: {offenders}"
+
+    # Belt-and-braces: confirm the service layer itself exposes no such
+    # method either, in case a future tool ever wraps an existing one.
+    import app.services.inventory as inventory_module
+    import app.services.khata as khata_module
+
+    for module in (inventory_module, khata_module):
+        for attr_name in dir(module):
+            candidate = getattr(module, attr_name)
+            if isinstance(candidate, type) and attr_name.endswith("Service"):
+                method_names = [m for m in dir(candidate) if not m.startswith("_")]
+                bad = [m for m in method_names if any(w in m for w in dangerous_words)]
+                assert not bad, f"{attr_name} exposes a delete-shaped method: {bad}"
