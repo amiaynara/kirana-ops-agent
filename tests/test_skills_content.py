@@ -30,3 +30,22 @@ def test_khata_skill_mentions_settle_guardrail():
 def test_preferences_skill_mentions_silent_application():
     content = _read("preferences").lower()
     assert "silent" in content or "don't re-ask" in content or "without asking" in content
+
+
+def test_invoicing_and_analytics_skill_files_exist_with_frontmatter():
+    for name in ("invoicing", "analytics"):
+        content = _read(name)
+        assert content.startswith("---"), f"{name} SKILL.md missing YAML frontmatter"
+        assert "description:" in content.splitlines()[2]
+
+
+def test_invoicing_skill_mentions_pdf_and_bill_id():
+    content = _read("invoicing").lower()
+    assert "pdf" in content
+    assert "bill" in content
+
+
+def test_analytics_skill_mentions_deck_and_charts():
+    content = _read("analytics").lower()
+    assert "pptx" in content or "deck" in content
+    assert "chart" in content

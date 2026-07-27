@@ -71,7 +71,9 @@ def test_agent_session_constructs_with_all_tool_domains_registered(tmp_path):
     assert session._options.setting_sources == ["project"]
     # Explicit allowlist, not "all" -- "all" leaks 12+ Claude Code CLI-bundled
     # skills (dataviz, update-config, security-review, ...) into this bot.
-    assert session._options.skills == ["inventory", "billing", "khata", "preferences"]
+    assert session._options.skills == [
+        "inventory", "billing", "khata", "preferences", "invoicing", "analytics",
+    ]
     assert session._options.cwd == str(session._options.cwd)  # sanity: it's set to something
     assert session._options.max_turns == 20
     # Model is pinned, not left to whatever the ambient `claude` CLI resolves to.
@@ -210,3 +212,15 @@ def test_send_discards_stale_artifact_after_a_failed_turn(tmp_path):
     result = asyncio.run(session.send("how much sugar is left?", update_id="u2"))
 
     assert result.artifact is None
+
+
+def test_agent_session_skills_allowlist_includes_invoicing_and_analytics(tmp_path):
+    engine = make_engine(str(tmp_path / "session_skills.db"))
+    Base.metadata.create_all(engine)
+    session_factory = make_session_factory(engine)
+
+    session = AgentSession(chat_id="test-chat", session_factory=session_factory)
+
+    assert set(session._options.skills) == {
+        "inventory", "billing", "khata", "preferences", "invoicing", "analytics",
+    }

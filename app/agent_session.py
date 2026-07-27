@@ -98,7 +98,7 @@ class AgentSession:
             # missing project skill just becomes silently undiscoverable, no
             # crash) -- verify live after touching this.
             setting_sources=["project"],
-            skills=["inventory", "billing", "khata", "preferences"],
+            skills=["inventory", "billing", "khata", "preferences", "invoicing", "analytics"],
             cwd=str(REPO_ROOT),
             system_prompt=system_prompt,
             max_turns=20,
