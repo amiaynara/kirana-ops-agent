@@ -1,8 +1,7 @@
 import io
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from zoneinfo import ZoneInfo
 
 import matplotlib
 
@@ -12,13 +11,7 @@ from pptx import Presentation  # noqa: E402
 from pptx.util import Inches  # noqa: E402
 
 from app.models import Bill, BillItem, Product  # noqa: E402
-
-SHOP_TIMEZONE = ZoneInfo("Asia/Kolkata")
-
-
-def _to_shop_date(created_at_utc_naive: datetime) -> date:
-    """Convert a naive-but-UTC-valued timestamp (as stored on Bill.created_at) to the shop's local (IST) calendar date."""
-    return created_at_utc_naive.replace(tzinfo=timezone.utc).astimezone(SHOP_TIMEZONE).date()
+from app.timezone_utils import SHOP_TIMEZONE, to_shop_date as _to_shop_date  # noqa: E402
 
 
 def _line_chart_png(x_labels: list[date], y_values: list[float], *, title: str, ylabel: str) -> io.BytesIO:
