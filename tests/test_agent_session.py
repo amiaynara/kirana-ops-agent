@@ -188,3 +188,25 @@ def test_send_returns_artifact_when_a_tool_populated_it(tmp_path):
     assert result.artifact.filename == "invoice-1.pdf"
     # Popped, not left behind for the next turn:
     assert session._artifact_context.pop() is None
+
+
+def test_send_discards_stale_artifact_after_a_failed_turn(tmp_path):
+    # Regression test: a tool sets an artifact mid-turn, then the turn fails
+    # (query() raises). The stale artifact must not survive to leak into the
+    # next -- unrelated -- successful turn on the same session.
+    session = _make_session(tmp_path)
+    fake_client = _install_fake_client(session, query_side_effect=RuntimeError("boom"))
+    session._connected = True
+
+    session._artifact_context.set(data=b"%PDF-fake", filename="stale.pdf", mime_type="application/pdf")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        asyncio.run(session.send("hello", update_id="u1"))
+
+    # Reconfigure the fake client to succeed normally on the next turn.
+    fake_client.query = AsyncMock()
+    session._connected = False
+
+    result = asyncio.run(session.send("how much sugar is left?", update_id="u2"))
+
+    assert result.artifact is None

@@ -221,6 +221,17 @@ class AgentSession:
                     raise
             finally:
                 self._update_context.current_update_id = None
+                # Drain any artifact left pending by a tool call this turn.
+                # A successful turn already popped-and-used it above at the
+                # return site, so this is a harmless no-op double-pop on that
+                # path. But if the turn failed (exception from connect(),
+                # query(), or receive_response(), including a future
+                # timeout-triggered CancelledError) or otherwise never
+                # reached that return, a tool-set artifact would otherwise
+                # sit in `_artifact_context` and leak into the next
+                # successful turn on this session (verified live) -- discard
+                # it here instead of deferring it forward.
+                self._artifact_context.pop()
 
     async def close(self):
         if self._connected:
