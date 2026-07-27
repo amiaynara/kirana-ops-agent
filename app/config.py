@@ -30,6 +30,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"anthropic_api_key and telegram_bot_token must be set when env={self.env!r}"
             )
+        if self.env != "local" and not self.allowed_telegram_chat_ids.strip():
+            raise ValueError(
+                f"allowed_telegram_chat_ids must be set when env={self.env!r} -- otherwise any "
+                "Telegram user who finds the bot gets full write access to the shop's data"
+            )
         return self
 
 

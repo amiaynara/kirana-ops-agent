@@ -15,6 +15,7 @@ def env_file(tmp_path, monkeypatch):
         "TELEGRAM_BOT_TOKEN=bot-test-456\n"
         "DB_PATH=./data/test.db\n"
         "LOG_LEVEL=DEBUG\n"
+        "ALLOWED_TELEGRAM_CHAT_IDS=111,222\n"
     )
     Path(".env.stage").write_text(content)
     return tmp_path
@@ -51,7 +52,14 @@ def test_invalid_env_value_raises():
 
 def test_non_local_env_with_empty_secrets_raises():
     with pytest.raises(ValidationError):
-        Settings(env="stage", anthropic_api_key="", telegram_bot_token="")
+        Settings(env="stage", anthropic_api_key="", telegram_bot_token="",
+                  allowed_telegram_chat_ids="111")
+
+
+def test_non_local_env_with_empty_allowlist_raises():
+    with pytest.raises(ValidationError):
+        Settings(env="stage", anthropic_api_key="sk-ant-real", telegram_bot_token="bot-real",
+                  allowed_telegram_chat_ids="")
 
 
 def test_non_local_env_with_secrets_set_succeeds():
@@ -59,7 +67,9 @@ def test_non_local_env_with_secrets_set_succeeds():
         env="stage",
         anthropic_api_key="sk-ant-real",
         telegram_bot_token="bot-real",
+        allowed_telegram_chat_ids="111,222",
     )
     assert settings.env == "stage"
     assert settings.anthropic_api_key == "sk-ant-real"
     assert settings.telegram_bot_token == "bot-real"
+    assert settings.allowed_telegram_chat_ids == "111,222"

@@ -52,7 +52,7 @@ class TelegramChannel:
         if self._allowed_chat_ids is not None and chat_id not in self._allowed_chat_ids:
             # Silently ignore -- don't reply, even with a refusal, so a
             # stranger probing the bot's username can't confirm it exists.
-            logger.info("Ignoring message from unrecognized chat_id=%s", chat_id)
+            logger.warning("Ignoring message from unrecognized chat_id=%s", chat_id)
             return
 
         text = message.text

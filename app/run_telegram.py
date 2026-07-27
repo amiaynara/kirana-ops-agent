@@ -1,3 +1,5 @@
+import logging
+
 from app.channels.telegram_channel import TelegramChannel
 from app.config import Settings, load_settings
 from app.db import init_db, make_session_factory
@@ -30,6 +32,10 @@ def build_channel(settings: Settings) -> TelegramChannel:
 
 def main():
     settings = load_settings()
+    # Without this, nothing this process logs (allowlist drops, dead-turn
+    # errors, reply_text failures) is ever emitted -- the root logger has no
+    # handler by default, so records only reach Python's silent lastResort.
+    logging.basicConfig(level=settings.log_level)
     channel = build_channel(settings)
     channel.run()
 
