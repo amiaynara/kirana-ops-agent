@@ -59,8 +59,8 @@ def build_analytics_tools(analytics_service, artifact_context):
 
     @tool(
         "render_analysis_deck",
-        "Generate a PPTX sales-analysis deck (with real charts) for a date range: sales trend, "
-        "top items, GST collected, and stock health.",
+        "Generate a PPTX sales-analysis deck for a date range: chart slides for sales trend and "
+        "top items, plus a text summary slide covering GST collected and stock health.",
         {
             "type": "object",
             "properties": {
