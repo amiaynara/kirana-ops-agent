@@ -5,12 +5,19 @@ from app.db import Base, make_engine, make_session_factory
 from app.services.inventory import InventoryService
 
 SEED_PRODUCTS = [
+    # Branded/packaged atta sold in a unit container is taxed at 5% GST --
+    # only loose/unbranded atta is nil-rated. This was wrong (0%) and shipped
+    # a real GST-compliance bug; see tests/test_seed_dev_data.py for the
+    # regression test that now guards every seeded SKU's slab against the
+    # actual published rate, not just "is it one of the 5 valid slabs".
     dict(name="Aashirvaad Atta 5kg", category="staples", unit="packet", is_loose=False,
-         hsn_code="11010000", gst_slab=0, cost_price=Decimal("220.00"),
+         hsn_code="11010000", gst_slab=5, cost_price=Decimal("220.00"),
          sell_price=Decimal("250.00"), mrp=Decimal("260.00"),
          reorder_level=Decimal("5"), initial_qty=Decimal("20")),
+    # Salt (all kinds, HSN 2501) is nil-rated regardless of branding -- this
+    # was wrong (5%), same bug class as the atta one above.
     dict(name="Tata Salt 1kg", category="staples", unit="packet", is_loose=False,
-         hsn_code="25010020", gst_slab=5, cost_price=Decimal("18.00"),
+         hsn_code="25010020", gst_slab=0, cost_price=Decimal("18.00"),
          sell_price=Decimal("22.00"), mrp=Decimal("24.00"),
          reorder_level=Decimal("10"), initial_qty=Decimal("40")),
     dict(name="Amul Butter 100g", category="dairy", unit="packet", is_loose=False,
